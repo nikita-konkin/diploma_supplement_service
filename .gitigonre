@@ -1,0 +1,44 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.iml
+*.code-workspace
+
+# Java / Maven
+target/
+**/target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+
+# Docker
+docker-compose.override.yml
+.env
+
+# Misc
+*.swp
+tmp/
+node_modules/
+coverage/
