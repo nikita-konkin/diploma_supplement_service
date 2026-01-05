@@ -23,7 +23,7 @@ import java.util.UUID;
  */
 public final class TkGenerateXml implements Take {
     
-    private static final String PYTHON_XML_URL = "http://localhost:8001";
+    private static final String PYTHON_XML_URL = Config.xmlApiBase();
     private static final String CRLF = "\r\n";
     
     @Override
@@ -163,7 +163,7 @@ public final class TkGenerateXml implements Take {
         final Map<String, String> params
     ) throws Exception {
         final String boundary = "----WebKitFormBoundary" + UUID.randomUUID().toString().replace("-", "");
-        final URL url = new URL(PYTHON_XML_URL + "/generate-xml");
+        final URL url = new URL(Config.xmlApiBase() + Config.xmlGeneratePath());
         final HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         
         try {

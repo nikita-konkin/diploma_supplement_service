@@ -50,7 +50,8 @@ services:
     ports:
       - "8080:8080"  # Public-facing port
     environment:
-      - PYTHON_ENGINE_URL=http://localhost:8000
+      - API_BASE_URL=http://localhost:8000
+      - XML_API_BASE_URL=http://localhost:8001
       - JAVA_OPTS=-Xmx512m -Xms256m
     depends_on:
       python-engine:
