@@ -535,8 +535,8 @@
 
             try {
                 // Use configured pivot service URL from runtime config
-                const apiBase = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) ? window.APP_CONFIG.API_BASE_URL : '';
-                const pivotPath = (window.APP_CONFIG && window.APP_CONFIG.API_PIVOT_PATH) ? window.APP_CONFIG.API_PIVOT_PATH : '/pivot';
+                const apiBase = (window.APP_CONFIG && window.APP_CONFIG.PIVOT_ENGINE_BASE_URL) ? window.APP_CONFIG.PIVOT_ENGINE_BASE_URL : '';
+                const pivotPath = (window.APP_CONFIG && window.APP_CONFIG.PIVOT_API_PATH) ? window.APP_CONFIG.PIVOT_API_PATH : '/pivot';
                 const pivotUrl = apiBase ? (apiBase.replace(/\/$/, '') + pivotPath) : '/pivot';
 
                 const response = await fetch(pivotUrl, {
