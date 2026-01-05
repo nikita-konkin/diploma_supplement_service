@@ -431,6 +431,15 @@
     </div>
 
     <script>
+        // Load runtime config from server into `window.APP_CONFIG`
+        window.APP_CONFIG = {};
+        window.APP_CONFIG_READY = (async function loadAppConfig(){
+            try {
+                const resp = await fetch('/config');
+                if (resp.ok) window.APP_CONFIG = await resp.json();
+            } catch (e) { /* ignore, fall back to defaults */ }
+        })();
+        
         // Tab switching
         function switchTab(index) {
             const tabs = document.querySelectorAll('.tab');
@@ -508,6 +517,9 @@
 
         pivotForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Wait for config to load before proceeding
+            await window.APP_CONFIG_READY;
 
             if (!scoresFile.files[0] || !disciplinesFile.files[0]) {
                 showStatus('pivotStatus', 'error', 'Please select both files');
@@ -522,7 +534,12 @@
             formData.append('disciplines_xlsx', disciplinesFile.files[0]);
 
             try {
-                const response = await fetch('http://localhost:8000/pivot', {
+                // Use configured pivot service URL from runtime config
+                const apiBase = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) ? window.APP_CONFIG.API_BASE_URL : '';
+                const pivotPath = (window.APP_CONFIG && window.APP_CONFIG.API_PIVOT_PATH) ? window.APP_CONFIG.API_PIVOT_PATH : '/pivot';
+                const pivotUrl = apiBase ? (apiBase.replace(/\/$/, '') + pivotPath) : '/pivot';
+
+                const response = await fetch(pivotUrl, {
                     method: 'POST',
                     body: formData
                 });
@@ -559,6 +576,9 @@
 
         xmlForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Wait for config to load before proceeding
+            await window.APP_CONFIG_READY;
 
             if (!pivotTableFile.files[0] || !studentInfoFile.files[0]) {
                 showStatus('xmlStatus', 'error', 'Please select required files');
@@ -588,7 +608,12 @@
             formData.append('state_exam_credits', document.getElementById('stateExamCredits').value);
 
             try {
-                const response = await fetch('http://localhost:8001/generate-xml', {
+                // Prefer explicit XML service URL from runtime config when available
+                const xmlBase = (window.APP_CONFIG && window.APP_CONFIG.XML_API_BASE_URL) ? window.APP_CONFIG.XML_API_BASE_URL : '';
+                const xmlPath = (window.APP_CONFIG && window.APP_CONFIG.XML_GENERATE_PATH) ? window.APP_CONFIG.XML_GENERATE_PATH : '/generate-xml';
+                const xmlUrl = xmlBase ? (xmlBase.replace(/\/$/, '') + xmlPath) : '/generate-xml';
+
+                const response = await fetch(xmlUrl, {
                     method: 'POST',
                     body: formData
                 });
