@@ -22,7 +22,7 @@ public final class Config {
     }
 
     public static String apiBase() {
-        return get("API_BASE_URL", "http://localhost:8080");
+        return get("PIVOT_ENGINE_BASE_URL", "http://localhost:8000");
     }
 
     public static int apiPort() {

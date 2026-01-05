@@ -50,8 +50,10 @@ services:
     ports:
       - "8080:8080"  # Public-facing port
     environment:
-      - API_BASE_URL=http://localhost:8000
-      - XML_API_BASE_URL=http://localhost:8001
+      # For Java inside Docker to reach host services, use host.docker.internal
+      # (on Windows/Mac Docker Desktop; on Linux use the host IP)
+      - PIVOT_ENGINE_BASE_URL=http://host.docker.internal:${PIVOT_API_PORT}
+      - XML_API_BASE_URL=http://host.docker.internal:${XML_API_PORT}
       - JAVA_OPTS=-Xmx512m -Xms256m
     depends_on:
       python-engine:
