@@ -30,7 +30,7 @@ public final class Config {
     }
 
     public static String xmlApiBase() {
-        return get("XML_API_BASE_URL", "http://localhost:8001");
+        return get("XML_API_BASE_URL", "http://python-xml-engine:8001");
     }
 
     public static String xmlGeneratePath() {

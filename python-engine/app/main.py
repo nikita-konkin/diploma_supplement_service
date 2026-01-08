@@ -113,6 +113,8 @@ async def create_pivot(
             )
         
         logger.info("Processing student workbook")
+        logger.info(f"Len of scores_content {len(scores_content)}")
+        logger.info(f"Len of disciplines_content {len(disciplines_content)}")
         
         # Process the workbooks
         df_raw_scores, df_report = process_student_workbook(

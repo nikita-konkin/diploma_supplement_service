@@ -16,7 +16,7 @@ import java.util.UUID;
 public final class PyEngineClient {
     
     private static final int BUFFER_SIZE = 8192;
-    private static final int TIMEOUT_MS = 120000; // 2 minutes
+    private static final int TIMEOUT_MS = 300000; // 5 minutes
     
     private final String baseUrl;
     
