@@ -6,6 +6,8 @@ import org.takes.facets.fork.FkRegex;
 import org.takes.facets.fork.TkFork;
 import org.takes.tk.TkClasspath;
 import org.takes.tk.TkWithType;
+import org.takes.tk.TkFiles;
+import java.io.File;
 
 /**
  * Main application entry point.
@@ -35,6 +37,12 @@ public final class App {
                 new FkRegex("/js/.+", new TkWithType(
                     new TkClasspath(),
                     "application/javascript; charset=UTF-8"
+                )),
+                
+                // Static Font files (from file system)
+                new FkRegex("/fonts/.+", new TkWithType(
+                    new TkFiles(new File("./resources/public")),
+                    "font/otf"
                 )),
                 
                 // API: Process XLSX files

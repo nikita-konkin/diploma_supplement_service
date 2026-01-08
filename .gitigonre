@@ -12,6 +12,7 @@ desktop.ini
 
 # Java / Maven
 target/
+*target/
 **/target/
 *.class
 *.jar
