@@ -5,10 +5,13 @@ Handles data extraction, normalization, and discipline matching.
 
 import re
 import io
+import zipfile
 import pandas as pd
 import numpy as np
 from typing import Optional, Tuple
 import logging
+
+import xml.etree.ElementTree as ET
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +191,81 @@ def match_row(orig_name: str, row_name: str) -> Optional[str]:
     
     return False
 
+def debug_excel_file(bytes_data):
+    # Check file signature
+    print(f"File size: {len(bytes_data)} bytes")
+    print(f"First 100 bytes: {bytes_data[:100]}")
+    
+    # Check if it starts with Excel signature
+    excel_signatures = [
+        b'PK\x03\x04',  # ZIP/Excel signature
+        b'\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1'  # OLE/old Excel
+    ]
+    
+    if bytes_data.startswith(b'PK'):
+        print("File appears to be a valid ZIP/Excel file")
+    else:
+        print("File does not appear to be a valid Excel file")
+    
+    # Try to list ZIP contents
+    
+    try:
+        with zipfile.ZipFile(io.BytesIO(bytes_data)) as zf:
+            print(f"ZIP contents: {zf.namelist()}")
+            if 'xl/sharedStrings.xml' in zf.namelist():
+                print("sharedStrings.xml found - good sign")
+            else:
+                print("WARNING: sharedStrings.xml not found in ZIP")
+    except Exception as e:
+        print(f"Not a valid ZIP file: {e}")
+
+def repair_excel_file(bytes_data):
+    """Attempt to repair corrupted Excel file"""
+    try:
+        # Read the ZIP file
+        with zipfile.ZipFile(io.BytesIO(bytes_data)) as zf:
+            # Extract sharedStrings.xml if it exists
+            if 'xl/sharedStrings.xml' in zf.namelist():
+                shared_strings = zf.read('xl/sharedStrings.xml')
+                
+                # Try to parse and repair XML
+                try:
+                    # Parse XML
+                    root = ET.fromstring(shared_strings)
+                    print("sharedStrings.xml is valid XML")
+                except ET.ParseError as e:
+                    print(f"XML parsing error: {e}")
+                    
+                    # Try to fix common XML issues
+                    # Remove null bytes
+                    shared_strings = shared_strings.replace(b'\x00', b'')
+                    # Remove invalid characters
+                    shared_strings = shared_strings.decode('utf-8', errors='ignore').encode('utf-8')
+                    
+                    try:
+                        root = ET.fromstring(shared_strings)
+                        print("XML repaired successfully")
+                    except:
+                        print("Could not repair XML")
+                        
+                        # Create minimal sharedStrings.xml
+                        shared_strings = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0" uniqueCount="0"></sst>'''
+            
+            # Recreate ZIP with repaired files
+            output = io.BytesIO()
+            with zipfile.ZipFile(output, 'w') as new_zip:
+                for name in zf.namelist():
+                    if name == 'xl/sharedStrings.xml':
+                        new_zip.writestr(name, shared_strings)
+                    else:
+                        new_zip.writestr(name, zf.read(name))
+            
+            return output.getvalue()
+            
+    except zipfile.BadZipFile:
+        print("File is not a valid ZIP archive")
+        return None
 
 def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> pd.DataFrame:
     """
@@ -201,6 +279,12 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
     Returns:
         DataFrame with matched disciplines and student scores
     """
+    logger.info(f"discipline_bytes len = {len(discipline_bytes)}")
+    debug_excel_file(discipline_bytes)
+    repaired_bytes = repair_excel_file(discipline_bytes)
+    if repaired_bytes:
+        df = pd.read_excel(io.BytesIO(repaired_bytes), engine='openpyxl')
+    logger.info(f"df = {df}")
     # Read discipline names from Excel
     df_origin_names = pd.read_excel(
         io.BytesIO(discipline_bytes), 
@@ -208,7 +292,7 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
         skiprows=1,
         engine='openpyxl'
     ).iloc[:, 1]
-    
+
     df_result = pd.DataFrame(index=df_origin_names, columns=df_stud_scores.columns)
     
     prefix_base = ''

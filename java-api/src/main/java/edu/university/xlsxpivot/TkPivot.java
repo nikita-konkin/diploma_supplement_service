@@ -11,6 +11,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.io.IOException;
+import java.io.EOFException;
 
 /**
  * Take that handles XLSX pivot processing requests.
@@ -23,10 +25,16 @@ public final class TkPivot implements Take {
     /**
      * Constructor with default Python engine URL.
      */
-    public TkPivot() {
-        this(new PyEngineClient("http://localhost:8000"));
-    }
+    // public TkPivot() {
+    //     this(new PyEngineClient("http://localhost:8000"));
+    // }
     
+    public TkPivot() {
+        this(new PyEngineClient(
+            System.getenv().getOrDefault("PYTHON_ENGINE_URL", "http://python-engine:8000")
+        ));
+    }
+
     /**
      * Constructor with custom Python engine client.
      * 
@@ -38,6 +46,7 @@ public final class TkPivot implements Take {
     
     @Override
     public Response act(final Request req) throws Exception {
+    
         System.out.println("TkPivot: received request, starting processing");
         try {
             // Parse multipart form data manually
@@ -112,88 +121,195 @@ public final class TkPivot implements Take {
      * @return Map of field name to file bytes
      * @throws Exception If parsing fails
      */
-    private Map<String, byte[]> parseMultipart(final Request req) throws Exception {
-        final Map<String, byte[]> files = new HashMap<>();
-        System.out.println("TkPivot.parseMultipart: entered");
+private Map<String, byte[]> parseMultipart(final Request req) throws IOException  {
+    final Map<String, byte[]> files = new HashMap<>();
+    System.out.println("TkPivot.parseMultipart: entered");
+    
+    // Get boundary
+    String boundary = extractBoundary(req);
+    if (boundary == null) {
+        throw new IllegalArgumentException("No boundary found");
+    }
+    
+    System.out.println("TkPivot.parseMultipart: boundary='" + boundary + "'");
+    byte[] boundaryBytes = boundary.getBytes("UTF-8");
+    
+    // Read body
+    final int length = this.contentLength(req);
+    System.out.println("TkPivot.parseMultipart: Content-Length=" + length);
+    final byte[] body = this.readFixedBytes(req.body(), length);
+    System.out.println("TkPivot.parseMultipart: Body size=" + body.length);
+    
+    // Save raw body for debugging
+    saveDebugFile("/tmp/raw_body.bin", body);
+    
+    // Find first boundary
+    int pos = findBytes(body, boundaryBytes, 0);
+    if (pos == -1) {
+        throw new IllegalArgumentException("No boundary found in body");
+    }
+    
+    System.out.println("TkPivot.parseMultipart: First boundary at position " + pos);
+    
+    // Process each part
+    while (true) {
+        // Move to start of part (after boundary)
+        pos += boundaryBytes.length;
         
-        // Get Content-Type header to extract boundary
-        String contentType = null;
-        for (final String header : req.head()) {
-            if (header.toLowerCase().startsWith("content-type:")) {
-                contentType = header.substring(13).trim();
-                break;
-            }
+        // Skip newline after boundary
+        if (pos < body.length && body[pos] == '\r') pos++;
+        if (pos < body.length && body[pos] == '\n') pos++;
+        
+        // Find end of headers (empty line)
+        int headerEnd = findHeaderEnd(body, pos);
+        if (headerEnd == -1) {
+            break; // No more parts
         }
-        System.out.println("TkPivot.parseMultipart: contentType header='" + contentType + "'");
         
-        if (contentType == null || !contentType.contains("multipart/form-data")) {
-            throw new IllegalArgumentException("Request must be multipart/form-data");
-        }
+        // Parse headers to get field name
+        String headers = new String(body, pos, headerEnd - pos, "UTF-8");
+        String fieldName = extractFieldName(headers);
         
-        // Extract boundary
-        final String boundaryPrefix = "boundary=";
-        final int boundaryIndex = contentType.indexOf(boundaryPrefix);
-        if (boundaryIndex == -1) {
-            throw new IllegalArgumentException("No boundary found in Content-Type");
-        }
-        final String boundary = "--" + contentType.substring(boundaryIndex + boundaryPrefix.length());
-        
-        // Read entire body
-        System.out.println("TkPivot.parseMultipart: about to read body stream");
-        final byte[] body = this.readAllBytes(req.body());
-        System.out.println("TkPivot.parseMultipart: finished reading body, size=" + (body == null ? 0 : body.length));
-        final String bodyStr = new String(body, "UTF-8");
-        
-        // Split by boundary
-        final String[] parts = bodyStr.split(boundary);
-        
-        for (final String part : parts) {
-            if (part.trim().isEmpty() || part.contains("--")) {
-                continue;
-            }
-            
-            // Extract field name from Content-Disposition header
-            final String namePrefix = "name=\"";
-            final int nameStart = part.indexOf(namePrefix);
-            if (nameStart == -1) {
-                continue;
-            }
-            
-            final int nameEnd = part.indexOf("\"", nameStart + namePrefix.length());
-            final String fieldName = part.substring(nameStart + namePrefix.length(), nameEnd);
-            
-            // Find the start of actual file content (after double CRLF)
-            final String doubleCrlf = "\r\n\r\n";
-            final int contentStart = part.indexOf(doubleCrlf);
-            if (contentStart == -1) {
-                continue;
-            }
-            
-            // Extract binary content
-            final int binaryStart = bodyStr.indexOf(part) + contentStart + doubleCrlf.length();
-            int binaryEnd = binaryStart;
+        if (fieldName != null) {
+            // Content starts after empty line
+            int contentStart = headerEnd;
             
             // Find next boundary
-            for (int i = binaryStart; i < body.length; i++) {
-                if (i + boundary.length() <= body.length) {
-                    final String check = new String(body, i, boundary.length(), "UTF-8");
-                    if (check.startsWith("\r\n--") || check.startsWith("\n--")) {
-                        binaryEnd = i;
-                        break;
+            int nextBoundary = findBytes(body, boundaryBytes, contentStart);
+            if (nextBoundary == -1) {
+                nextBoundary = body.length;
+            }
+            
+            // Adjust for newline before boundary
+            int contentEnd = nextBoundary;
+            if (contentEnd > contentStart && contentEnd - 1 < body.length) {
+                if (body[contentEnd - 1] == '\n') {
+                    contentEnd--;
+                    if (contentEnd > contentStart && body[contentEnd - 1] == '\r') {
+                        contentEnd--;
                     }
                 }
             }
             
-            if (binaryEnd > binaryStart) {
-                final byte[] fileContent = new byte[binaryEnd - binaryStart];
-                System.arraycopy(body, binaryStart, fileContent, 0, fileContent.length);
+            // Extract file content
+            if (contentEnd > contentStart) {
+                byte[] fileContent = new byte[contentEnd - contentStart];
+                System.arraycopy(body, contentStart, fileContent, 0, fileContent.length);
                 files.put(fieldName, fileContent);
+                
+                System.out.println("TkPivot.parseMultipart: Extracted " + fieldName + 
+                                 " (" + fileContent.length + " bytes)");
+                
+                // Save for debugging
+                saveDebugFile("/tmp/" + fieldName + ".xlsx", fileContent);
+                
+                // Check signature
+                checkFileSignature(fieldName, fileContent);
             }
+            
+            // Move to next boundary
+            pos = nextBoundary;
+        } else {
+            // No field name found, skip to next boundary
+            int nextBoundary = findBytes(body, boundaryBytes, headerEnd);
+            if (nextBoundary == -1) break;
+            pos = nextBoundary;
         }
         
-        return files;
+        // Check if this is the last boundary (ends with --)
+        if (pos + 2 < body.length && body[pos + boundaryBytes.length] == '-' && 
+            body[pos + boundaryBytes.length + 1] == '-') {
+            break; // Last boundary
+        }
     }
     
+    System.out.println("TkPivot.parseMultipart: Found " + files.size() + " files");
+    return files;
+}
+
+
+private String extractBoundary(Request req) throws IOException  {
+    for (final String header : req.head()) {
+        if (header.toLowerCase().startsWith("content-type:")) {
+            final String ct = header.substring(13).trim();
+            final int idx = ct.indexOf("boundary=");
+            if (idx != -1) {
+                String boundary = ct.substring(idx + 9);
+                if (boundary.startsWith("\"")) {
+                    boundary = boundary.substring(1, boundary.length() - 1);
+                }
+                return "--" + boundary;
+            }
+        }
+    }
+    return null;
+}
+
+private int findBytes(byte[] array, byte[] target, int fromIndex) {
+    if (fromIndex >= array.length || target.length == 0) {
+        return -1;
+    }
+    
+    outer:
+    for (int i = fromIndex; i <= array.length - target.length; i++) {
+        for (int j = 0; j < target.length; j++) {
+            if (array[i + j] != target[j]) {
+                continue outer;
+            }
+        }
+        return i;
+    }
+    return -1;
+}
+
+private int findHeaderEnd(byte[] body, int start) {
+    for (int i = start; i < body.length - 3; i++) {
+        // Look for \r\n\r\n
+        if (body[i] == '\r' && body[i+1] == '\n' && 
+            body[i+2] == '\r' && body[i+3] == '\n') {
+            return i + 4;
+        }
+        // Look for \n\n
+        if (body[i] == '\n' && body[i+1] == '\n') {
+            return i + 2;
+        }
+    }
+    return -1;
+}
+
+private String extractFieldName(String headers) {
+    int nameStart = headers.indexOf("name=\"");
+    if (nameStart == -1) return null;
+    
+    int nameEnd = headers.indexOf("\"", nameStart + 6);
+    if (nameEnd == -1) return null;
+    
+    return headers.substring(nameStart + 6, nameEnd);
+}
+
+private void saveDebugFile(String filename, byte[] data) {
+    try {
+        java.nio.file.Files.write(java.nio.file.Paths.get(filename), data);
+        System.out.println("Saved debug file: " + filename);
+    } catch (Exception e) {
+        System.out.println("Could not save debug file: " + e.getMessage());
+    }
+}
+
+private void checkFileSignature(String fieldName, byte[] data) {
+    if (data.length >= 4) {
+        if (data[0] == 'P' && data[1] == 'K' && data[2] == 3 && data[3] == 4) {
+            System.out.println("✓ " + fieldName + ": Valid Excel signature");
+        } else {
+            System.out.print("✗ " + fieldName + ": Invalid signature - ");
+            for (int i = 0; i < Math.min(4, data.length); i++) {
+                System.out.print(String.format("%02X ", data[i] & 0xFF));
+            }
+            System.out.println();
+        }
+    }
+}
+
     /**
      * Read all bytes from an input stream.
      * 
@@ -201,7 +317,7 @@ public final class TkPivot implements Take {
      * @return Byte array
      * @throws Exception If reading fails
      */
-    private byte[] readAllBytes(final InputStream input) throws Exception {
+    private byte[] readAllBytes(final InputStream input) throws IOException  {
         final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         final byte[] data = new byte[8192];
         int bytesRead;
@@ -212,4 +328,35 @@ public final class TkPivot implements Take {
         
         return buffer.toByteArray();
     }
+
+    private int contentLength(final Request req) throws IOException  {
+        for (final String header : req.head()) {
+            if (header.toLowerCase().startsWith("content-length:")) {
+                return Integer.parseInt(header.substring(15).trim());
+            }
+        }
+        throw new IllegalArgumentException("Content-Length header is missing");
+    }
+
+    private byte[] readFixedBytes(final InputStream input, final int length)
+        throws IOException {
+
+        final byte[] result = new byte[length];
+        int offset = 0;
+
+        while (offset < length) {
+            final int read = input.read(result, offset, length - offset);
+            if (read == -1) {
+                throw new EOFException(
+                    "Unexpected end of stream: expected " + length +
+                    " bytes, got " + offset
+                );
+            }
+            offset += read;
+        }
+
+        return result;
+    }
+
+
 }
