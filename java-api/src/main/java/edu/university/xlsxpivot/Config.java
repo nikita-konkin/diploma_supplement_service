@@ -22,7 +22,8 @@ public final class Config {
     }
 
     public static String apiBase() {
-        return get("PIVOT_ENGINE_BASE_URL", "http://localhost:8000");
+        return get("PIVOT_ENGINE_BASE_URL", "xn----etb9agicel");
+        // return "xn----etb9agicel.xn--p1ai";
     }
 
     public static int apiPort() {
@@ -30,7 +31,7 @@ public final class Config {
     }
 
     public static String xmlApiBase() {
-        return get("XML_API_BASE_URL", "http://python-xml-engine:8001");
+        return get("XML_API_BASE_URL", "xn----etb9agicel.xn--p1ai");
     }
 
     public static String xmlGeneratePath() {
@@ -38,7 +39,8 @@ public final class Config {
     }
 
     public static String pivotEngineBase() {
-        return get("PIVOT_ENGINE_BASE_URL", "http://localhost:8000");
+        return get("PIVOT_ENGINE_BASE_URL", "xn----etb9agicel");
+        // return "xn----etb9agicel.xn--p1ai";
     }
 
     public static String apiPivotPath() {

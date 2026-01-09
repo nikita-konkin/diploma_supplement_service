@@ -538,9 +538,10 @@
 
             try {
                 // Use configured pivot service URL from runtime config
-                const apiBase = (window.APP_CONFIG && window.APP_CONFIG.PIVOT_ENGINE_BASE_URL) ? window.APP_CONFIG.PIVOT_ENGINE_BASE_URL : '';
-                const pivotPath = (window.APP_CONFIG && window.APP_CONFIG.PIVOT_API_PATH) ? window.APP_CONFIG.PIVOT_API_PATH : '/pivot';
-                const pivotUrl = apiBase ? (apiBase.replace(/\/$/, '') + pivotPath) : '/pivot';
+                // const apiBase = (window.APP_CONFIG && window.APP_CONFIG.PIVOT_ENGINE_BASE_URL) ? window.APP_CONFIG.PIVOT_ENGINE_BASE_URL : '';
+                // const pivotPath = (window.APP_CONFIG && window.APP_CONFIG.PIVOT_API_PATH) ? window.APP_CONFIG.PIVOT_API_PATH : '/pivot';
+                // const pivotUrl = apiBase ? (apiBase.replace(/\/$/, '') + pivotPath) : '/pivot';
+                const pivotUrl = '/pivot';
 
                 const response = await fetch(pivotUrl, {
                     method: 'POST',
@@ -612,9 +613,9 @@
 
             try {
                 // Prefer explicit XML service URL from runtime config when available
-                const xmlBase = (window.APP_CONFIG && window.APP_CONFIG.XML_API_BASE_URL) ? window.APP_CONFIG.XML_API_BASE_URL : '';
-                const xmlPath = (window.APP_CONFIG && window.APP_CONFIG.XML_GENERATE_PATH) ? window.APP_CONFIG.XML_GENERATE_PATH : '/generate-xml';
-                const xmlUrl = xmlBase ? (xmlBase.replace(/\/$/, '') + xmlPath) : '/generate-xml';
+                // const xmlBase = (window.APP_CONFIG && window.APP_CONFIG.XML_API_BASE_URL) ? window.APP_CONFIG.XML_API_BASE_URL : '';
+                // const xmlPath = (window.APP_CONFIG && window.APP_CONFIG.XML_GENERATE_PATH) ? window.APP_CONFIG.XML_GENERATE_PATH : '/generate-xml';
+                const xmlUrl ='/generate-xml';
 
                 const response = await fetch(xmlUrl, {
                     method: 'POST',
