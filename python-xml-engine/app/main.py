@@ -64,7 +64,7 @@ async def health():
 async def generate_xml(
     pivot_table: UploadFile = File(..., description="Pivot table from previous service"),
     student_info: UploadFile = File(..., description="Student information file"),
-    curriculum: UploadFile = File(..., description="Curriculum file (optional)"),
+    # curriculum: UploadFile = File(..., description="Curriculum file (optional)"),
     # curriculum: Optional[UploadFile] = File(None, description="Curriculum file (optional)"),
     
     # Configuration parameters
@@ -109,7 +109,7 @@ async def generate_xml(
         logger.info(f"Reading student info: {student_info.filename}")
         student_bytes = await student_info.read()
         
-        curriculum_bytes = await curriculum.read()
+        # curriculum_bytes = await curriculum.read()
         # curriculum_bytes = None
         # if curriculum:
         #     logger.info(f"Reading curriculum: {curriculum.filename}")
@@ -147,24 +147,24 @@ async def generate_xml(
         generator = DiplomaXMLGenerator(config)
         
         # Parse curriculum if provided
-        df_plan = generator.parse_curriculum(curriculum_bytes)
+        # df_plan = generator.parse_curriculum(curriculum_bytes)
         
         # Match credits from curriculum
-        if not df_plan.empty:
-            df_disciplines = generator.match_credits(df_disciplines, df_plan)
+        # if not df_plan.empty:
+        #     df_disciplines = generator.match_credits(df_disciplines, df_plan)
         
         # Add postfixes to discipline names
-        df_disciplines = generator.add_discipline_postfixes(df_disciplines)
+        # df_disciplines = generator.add_discipline_postfixes(df_disciplines)
         
         # Fix state exam credits
-        df_disciplines = generator.fix_state_exam_credits(df_disciplines)
+        # df_disciplines = generator.fix_state_exam_credits(df_disciplines)
         
         # Add credits to discipline names
-        df_disciplines['Дисциплины'] = (
-            df_disciplines['Дисциплины'] + '_' + 
-            df_disciplines['зачЕд'].astype(str)
-        )
-        df_disciplines.drop(columns=['зачЕд'], inplace=True)
+        # df_disciplines['Дисциплины'] = (
+        #     df_disciplines['Дисциплины'] + '_' + 
+        #     df_disciplines['зачЕд'].astype(str)
+        # )
+        # df_disciplines.drop(columns=['зачЕд'], inplace=True)
         df_disciplines.set_index('Дисциплины', inplace=True)
         
         logger.info("Generating XML")
