@@ -53,6 +53,9 @@ def parse_rating(df: pd.DataFrame, df_stud_scores: pd.DataFrame, stud_name: str)
         if pd.notna(row.get('зачет')):
             rate = row['зачет']
             suffix = '_практика_' if 'практика' in str(subject).lower() else '_дисциплина_'
+        elif 'практика' in str(subject).lower():
+            rate = row.get('зачет', np.nan)
+            suffix = '_практика_'
         elif pd.notna(row.get('экзамен')):
             rate = row['экзамен']
             suffix = '_дисциплина_'
@@ -294,11 +297,11 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
     ).iloc[:, 1]
 
     df_result = pd.DataFrame(index=df_origin_names, columns=df_stud_scores.columns)
-    
+    print('------', df_result)
     prefix_base = ''
     count_of_prefix = 0
     old_index = ''
-    
+
     for orig_index in df_result.index:
         matched = False
         
@@ -316,6 +319,7 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
                         break
                     else:
                         df_result.loc[orig_index] = row
+                        df_result = replace_index_occurrence(df_result, orig_index, row_index)
                         matched = True
                         break
                         
@@ -330,6 +334,7 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
                     
                 elif match == 'kurs':
                     logger.info(f"Matched course work: {row_index}")
+                    print(f"Matched course work: {row_index}")
                     df_result.loc[row_index] = row
                     
                 elif match == 'prefix':

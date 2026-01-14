@@ -12,6 +12,8 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, status
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 
 from .parser import process_student_workbook
 
@@ -37,6 +39,81 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def highlight_problematic_cells(output_bytes: bytes) -> bytes:
+    """
+    Highlights cells with missing values, '!', or '?' symbols in the Excel file.
+    
+    Args:
+        output_bytes: Bytes content of the Excel file
+        
+    Returns:
+        Modified bytes with highlighted cells
+    """
+    # Load the workbook
+    wb = load_workbook(io.BytesIO(output_bytes))
+    
+    # Define fill colors
+    yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')  # Yellow for missing
+    red_fill = PatternFill(start_color='FF6B6B', end_color='FF6B6B', fill_type='solid')     # Light red for ! and ?
+    
+    # Process Report sheet
+    if 'Report' in wb.sheetnames:
+        ws = wb['Report']
+        logger.info(f"Processing Report sheet with {ws.max_row} rows and {ws.max_column} columns")
+        
+        # Start from row 2 (skip header) and column 2 (skip index)
+        for row_idx in range(2, ws.max_row + 1):
+            for col_idx in range(2, ws.max_column + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell_value = cell.value
+                
+                # Check for problematic values
+                if cell_value is None or cell_value == '' or (isinstance(cell_value, str) and cell_value.strip() == ''):
+                    # Missing value - highlight in yellow
+                    cell.fill = yellow_fill
+                    logger.debug(f"Highlighted empty cell at row {row_idx}, col {col_idx}")
+                    
+                elif isinstance(cell_value, str) and ('!' in cell_value or '?' in cell_value):
+                    # Contains ! or ? - highlight in red
+                    cell.fill = red_fill
+                    logger.debug(f"Highlighted cell with '{cell_value}' at row {row_idx}, col {col_idx}")
+                elif isinstance(cell_value, str) and cell_value.strip() != '':
+                    # Convert string digits to int if possible
+                    try:
+                        cell.value = int(cell_value)
+                        logger.debug(f"Converted cell value '{cell_value}' to integer at row {row_idx}, col {col_idx}") 
+                    except ValueError:
+                        pass  # Not a digit, skip
+    
+    # Process RawScores sheet
+    if 'RawScores' in wb.sheetnames:
+        ws = wb['RawScores']
+        logger.info(f"Processing RawScores sheet with {ws.max_row} rows and {ws.max_column} columns")
+        
+        # Start from row 2 (skip header) and column 2 (skip index)
+        for row_idx in range(2, ws.max_row + 1):
+            for col_idx in range(2, ws.max_column + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                cell_value = cell.value
+                
+                # Check for problematic values
+                if cell_value is None or cell_value == '' or (isinstance(cell_value, str) and cell_value.strip() == ''):
+                    # Missing value - highlight in yellow
+                    cell.fill = yellow_fill
+                    
+                elif isinstance(cell_value, str) and ('!' in cell_value or '?' in cell_value):
+                    # Contains ! or ? - highlight in red
+                    cell.fill = red_fill
+    
+    # Save to bytes
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    logger.info("Cell highlighting completed")
+    return output.getvalue()
 
 
 @app.get("/")
@@ -136,6 +213,13 @@ async def create_pivot(
         
         output.seek(0)
         
+        # Apply highlighting to problematic cells
+        logger.info("Applying cell highlighting")
+        highlighted_bytes = highlight_problematic_cells(output.getvalue())
+        
+        # Create new BytesIO with highlighted content
+        final_output = io.BytesIO(highlighted_bytes)
+        
         # Generate filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"pivot_report_{timestamp}.xlsx"
@@ -143,7 +227,7 @@ async def create_pivot(
         logger.info(f"Returning result: {filename}")
         
         return StreamingResponse(
-            output,
+            final_output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={
                 "Content-Disposition": f"attachment; filename={filename}"
