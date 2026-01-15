@@ -9,15 +9,12 @@ import org.takes.rs.RsWithBody;
 import org.takes.rs.RsWithStatus;
 import org.takes.rs.RsWithType;
 
-/**
- * Take that serves the `public/index.html` resource from the classpath.
- */
-public final class TkIndex implements Take {
+public final class TkPivotDescription implements Take {
 
-    @Override
+    @Deprecated
     public Response act(final Request req) throws Exception {
         final InputStream in = this.getClass().getResourceAsStream(
-            "/public/index.html"
+            "/public/pivot-table-description.html"
         );
         if (in == null) {
             return new RsWithStatus(new RsWithBody("Not found"), 404);

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" href="/styles.css" />
+        <title>Student Score Processing Services</title>
+    </head>
+    <body>
+        <div class="container">
+            <a href="/" class="round-button">Домой</a>
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab(0)">
+                    &#x1F9EE; Описание и корректировки сводной таблицы
+                </button>
+                <!--<button class="tab" onclick="switchTab(1)">
+                    &#x1F9EE; Корректировки сводной таблицы
+                </button>-->
+                <!--<button class="tab" onclick="switchTab(1)">
+                    📄 Подготовка к XML
+                </button>-->
+            </div>
+
+            <!-- Tab 0: Description -->
+            <div class="tab-content active" id="tab-description">
+                <h1>&#x1F9EE; Описание сводной таблицы результатов обучения</h1>
+                <p class="subtitle">
+                    Руководство по работе со сводной таблицей
+                </p>
+
+                <div class="description-section">
+                    <h2 class="section-title">Описание таблицы</h2>
+                    <p class="description-text">
+                        Сводная таблица "pivot_report" содержит результаты
+                        обучения студентов по всем дисциплинам учебного плана.
+                        Таблица включает следующую информацию:
+                    </p>
+
+                    <ul class="description-list">
+                        <li>
+                            <strong>Столбец "Дисциплины"</strong>: содержит
+                            названия учебных дисциплин в формате:
+                            Название_тип_зачетные_единицы (например,
+                            "Математика_дисциплина_5")
+                        </li>
+                        <li>
+                            <strong>Столбцы с именами студентов</strong>:
+                            содержат оценки по соответствующим дисциплинам
+                        </li>
+                        <li>
+                            <strong>Разделы таблицы</strong>: дисциплина,
+                            факультатив, практика, госэкзамен, курсовая
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="description-section">
+                    <h3 class="subsection-title">Формат оценок</h3>
+                    <p class="description-text">
+                        В ячейках с оценками используются следующие обозначения:
+                    </p>
+                    <ul class="description-list">
+                        <li>
+                            <strong>3, 4, 5</strong>: числовые оценки за
+                            экзамены
+                        </li>
+                        <li><strong>6</strong>: зачет (зачтено)</li>
+                        <li>
+                            <strong>? и !</strong>: пропуск или отсутствие
+                            оценки
+                        </li>
+                        <li>
+                            <strong>Пустая ячейка</strong>: оценки нет в базе
+                            данных
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="info-box important">
+                    <strong>💡 Зачетные единицы</strong><br />
+                    Зачетные единицы дисциплины указаны в ее названии после
+                    знака подчеркивания "_". Например, в
+                    "Математика_дисциплина_5" зачетных единиц: 5.
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="description-section">
+                    <h2 class="section-title">
+                        Инструкции по редактированию таблицы
+                    </h2>
+
+                    <div class="warning-box">
+                        <strong>⚠️ ЧТО НЕОБХОДИМО СДЕЛАТЬ:</strong>
+                    </div>
+
+                    <div class="instruction-block">
+                        <h3 class="instruction-title">
+                            1. Убрать лишние строки
+                        </h3>
+                        <p class="description-text">
+                            <strong>Удалите</strong> все строки в конце таблицы
+                            с названиями типа
+                            <em
+                                >"Элективная дисциплина 1 (...)", "Элективная
+                                дисциплина 2 (...)"</em
+                            >
+                            и т.д.
+                        </p>
+                        <ul class="description-list">
+                            <li>
+                                Эти строки содержат полные названия элективных
+                                дисциплин и должны быть удалены
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="instruction-block">
+                        <h3 class="instruction-title">
+                            2. Проверить корректность данных
+                        </h3>
+                        <ul class="description-list">
+                            <li>
+                                <strong>Зачетные единицы</strong>: убедитесь,
+                                что зачетные единицы в названиях дисциплин
+                                соответствуют учебному плану
+                            </li>
+                            <li>
+                                <strong>Элективные дисциплины</strong>:
+                                проверьте правильность выбора элективных
+                                дисциплин студентами
+                            </li>
+                            <li>
+                                <strong>Оценки</strong>: проверьте корректность
+                                оценок.
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="instruction-block">
+                        <h3 class="instruction-title">
+                            3. Сохранить структуру таблицы
+                        </h3>
+                        <div class="info-box important">
+                            <strong>❗ ВАЖНО!</strong><br />
+                            После всех исправлений обязательно сохраните
+                            заголовки разделов:
+                            <br />
+                            <ul
+                                class="description-list highlight-list desable-list-type margin-top-15"
+                            >
+                                <li><strong>Дисциплины</strong></li>
+                                <li><strong>факультатив</strong></li>
+                                <li><strong>практика</strong></li>
+                                <li><strong>госэкзамен</strong></li>
+                                <li><strong>курсовая</strong></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <strong>✅ Рекомендации после редактирования:</strong><br />
+                    • Проверьте, что все обязательные дисциплины имеют оценки<br />
+                    • Убедитесь, что сумма зачетных единиц соответствует
+                    требованиям программы<br />
+                    • Сохраните отредактированный файл под новым именем
+                </div>
+            </div>
+
+            <!-- Tab 1: Pivot corrections -->
+            <!--<div class="tab-content" id="tab-pivot">
+                <h1>&#x1F9EE; Создание сводной таблицы</h1>
+                <p class="subtitle">
+                    Создание сводной таблицы (дисциплины - колонки, студенты -
+                    строчки)
+                </p>
+            </div>-->
+
+            <!-- Tab 2: XML preparation -->
+            <!--<div class="tab-content" id="tab-xml">
+                <h1>📄 Подготовка к XML</h1>
+                <p class="subtitle">
+                    Конвертировать сводную таблицу в XML документ для программы
+                    КиберДИПЛОМ
+                </p>
+            </div>-->
+        </div>
+        <script src="/script.js"></script>
+    </body>
+</html>
