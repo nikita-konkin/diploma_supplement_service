@@ -10,17 +10,17 @@ import org.takes.rs.RsWithStatus;
 import org.takes.rs.RsWithType;
 
 /**
- * Take that serves the `public/index.html` resource from the classpath.
+ * Take that serves the `public/styles.css` resource from the classpath.
  */
-public final class TkIndex implements Take {
+public final class TkStyles implements Take {
 
     @Override
     public Response act(final Request req) throws Exception {
         final InputStream in = this.getClass().getResourceAsStream(
-            "/public/index.html"
+            "/public/css/styles.css"
         );
         if (in == null) {
-            return new RsWithStatus(new RsWithBody("Not found"), 404);
+            return new RsWithStatus(new RsWithBody("CSS file not found"), 404);
         }
         final ByteArrayOutputStream buf = new ByteArrayOutputStream();
         final byte[] tmp = new byte[8192];
@@ -31,7 +31,7 @@ public final class TkIndex implements Take {
         in.close();
         return new RsWithType(
             new RsWithBody(buf.toByteArray()),
-            "text/html; charset=UTF-8"
+            "text/css; charset=UTF-8"
         );
     }
 }
