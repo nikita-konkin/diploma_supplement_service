@@ -50,7 +50,7 @@ disciplinesFile.addEventListener("change", (e) => {
 // File input handlers - XML Service
 const pivotTableFile = document.getElementById("pivotTableFile");
 const studentInfoFile = document.getElementById("studentInfoFile");
-const curriculumFile = document.getElementById("curriculumFile");
+// const curriculumFile = document.getElementById("curriculumFile");
 const pivotTableLabel = document.getElementById("pivotTableLabel");
 const studentInfoLabel = document.getElementById("studentInfoLabel");
 const curriculumLabel = document.getElementById("curriculumLabel");
@@ -72,12 +72,12 @@ studentInfoFile.addEventListener("change", (e) => {
   }
 });
 
-curriculumFile.addEventListener("change", (e) => {
-  if (e.target.files.length > 0) {
-    curriculumLabel.classList.add("has-file");
-    curriculumName.textContent = e.target.files[0].name;
-  }
-});
+// curriculumFile.addEventListener("change", (e) => {
+//   if (e.target.files.length > 0) {
+//     curriculumLabel.classList.add("has-file");
+//     curriculumName.textContent = e.target.files[0].name;
+//   }
+// });
 
 // Pivot form submission
 const pivotForm = document.getElementById("pivotForm");
@@ -172,9 +172,6 @@ xmlForm.addEventListener("submit", async (e) => {
   const formData = new FormData();
   formData.append("pivot_table", pivotTableFile.files[0]);
   formData.append("student_info", studentInfoFile.files[0]);
-  if (curriculumFile.files[0]) {
-    formData.append("curriculum", curriculumFile.files[0]);
-  }
 
   // Add configuration
   formData.append("edu_term", document.getElementById("eduTerm").value);
@@ -204,9 +201,6 @@ xmlForm.addEventListener("submit", async (e) => {
   );
 
   try {
-    // Prefer explicit XML service URL from runtime config when available
-    // const xmlBase = (window.APP_CONFIG && window.APP_CONFIG.XML_API_BASE_URL) ? window.APP_CONFIG.XML_API_BASE_URL : '';
-    // const xmlPath = (window.APP_CONFIG && window.APP_CONFIG.XML_GENERATE_PATH) ? window.APP_CONFIG.XML_GENERATE_PATH : '/generate-xml';
     const xmlUrl = "/generate-xml";
 
     const response = await fetch(xmlUrl, {
@@ -220,7 +214,23 @@ xmlForm.addEventListener("submit", async (e) => {
     }
 
     const blob = await response.blob();
-    downloadFile(blob, `diploma_${Date.now()}.xml`);
+    
+    // ===== MODIFIED: Get speciality value for filename =====
+    const speciality = document.getElementById("speciality").value;
+    
+    // Create a safe filename by removing special characters
+    const safeSpeciality = speciality
+      .replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, '') // Remove special chars, keep Cyrillic
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .substring(0, 50); // Limit length to 50 chars
+    
+    // Use speciality in filename if available
+    const filename = safeSpeciality 
+      ? `${safeSpeciality}_${Date.now()}.xml`
+      : `diploma_${Date.now()}.xml`;
+    
+    downloadFile(blob, filename);
+    // ===== END MODIFICATION =====
 
     showStatus(
       "xmlStatus",
