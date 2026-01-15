@@ -164,7 +164,9 @@ private void parseMultipartRequest(
     for (int i = 0; i < parts.length; i++) {
         final String part = parts[i];
         
-        if (part.trim().isEmpty() || part.contains("--")) {
+        // Skip empty parts or the closing boundary marker (which is just "--" or "--\r\n")
+        String trimmed = part.trim();
+        if (trimmed.isEmpty() || trimmed.equals("--") || trimmed.startsWith("--\r") || trimmed.startsWith("--\n")) {
             System.out.println("TkGenerateXml.parseMultipartRequest: Skipping part " + i);
             currentPos += part.length() + boundary.length();
             continue;
