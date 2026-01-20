@@ -291,10 +291,24 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
     # Read discipline names from Excel
     df_origin_names = pd.read_excel(
         io.BytesIO(discipline_bytes), 
-        header=None, 
-        skiprows=1,
+        header=0, 
+        # skiprows=1,
         engine='openpyxl'
-    ).iloc[:, 1]
+    )
+    logger.info(df_origin_names)
+    logger.info(df_origin_names.columns)
+    clean_cols = [re.sub(r'\s+', '', str(col).lower()) for col in df_origin_names.columns]
+
+    target = 'обязательнаячасть'
+    matches = [i for i, col in enumerate(clean_cols) if target in col]
+
+    if matches:
+        col_idx = matches[0]
+        df_origin_names = df_origin_names.iloc[:, col_idx].drop(df_origin_names.index[0])
+        logger.info("Column 'обязательнаячасть' is finded =)")
+    else:
+        result = None
+        logger.info("No column with name 'обязательнаячасть'")
 
     df_result = pd.DataFrame(index=df_origin_names, columns=df_stud_scores.columns)
     print('------', df_result)
