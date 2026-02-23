@@ -1,98 +1,172 @@
 services:
-  # Python XLSX Processing Engine
+
   python-engine:
-    build:
-      context: ./python-engine
-      dockerfile: Dockerfile
-    container_name: xlsx-python-engine
-    ports:
-      - "8000:8000"  # Expose for debugging (optional)
-    environment:
-      - PYTHONUNBUFFERED=1 
-      - LOG_LEVEL=INFO
-    networks:
-      - xlsx-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
+      build:
+          context: ./python-engine
+          dockerfile: Dockerfile
+      container_name: diploma-python-engine
+      ports:
+          - "8000:8000"  # Expose for debugging (optional)
+      expose:
+          - 8000
+      environment:
+          - PYTHONUNBUFFERED=1
+          - LOG_LEVEL=INFO
+      networks:
+          - mynetwork
+      healthcheck:
+          test:
+              [
+                  "CMD-SHELL",
+                  'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8000/health'', timeout=2)"',
+              ]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+          start_period: 10s
+      restart: unless-stopped
 
-  # Python XML Generation Engine (Diploma Service)
   python-xml-engine:
-    build:
-      context: ./python-xml-engine
-      dockerfile: Dockerfile
-    container_name: xlsx-python-xml-engine
-    ports:
-      - "8001:8001"  # Expose for debugging (optional)
-    environment:
-      - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=INFO
-    networks:
-      - xlsx-network
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-    restart: unless-stopped
+      build:
+          context: ./python-xml-engine
+          dockerfile: Dockerfile
+      container_name: diploma-python-xml-engine
+      ports:
+          - "8001:8001"  # Expose for debugging (optional)
+      expose:
+          - 8001
+      environment:
+          - PYTHONUNBUFFERED=1
+          - LOG_LEVEL=INFO
+      networks:
+          - mynetwork
+      healthcheck:
+          test:
+              [
+                  "CMD-SHELL",
+                  'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8001/health'', timeout=2)"',
+              ]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+          start_period: 10s
+      restart: unless-stopped
 
-  # Java API Gateway (Takes)
   java-gateway:
-    build:
-      context: ./java-api
-      dockerfile: Dockerfile
-    container_name: xlsx-java-gateway
-    ports:
-      - "8080:8080"  # Public-facing port
-    environment:
-      # For Java inside Docker to reach host services, use host.docker.internal
-      # (on Windows/Mac Docker Desktop; on Linux use the host IP)
-      - PIVOT_ENGINE_BASE_URL=http://host.docker.internal:${PIVOT_API_PORT}
-      - XML_API_BASE_URL=http://host.docker.internal:${XML_API_PORT}
-      - JAVA_OPTS=-Xmx512m -Xms256m
-    depends_on:
-      python-engine:
-        condition: service_healthy
-    networks:
-      - xlsx-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    restart: unless-stopped
+      build:
+          context: ./java-api
+          dockerfile: Dockerfile
+      container_name: xlsx-java-gateway
+      ports:
+          - "8080:8080"  # Public-facing port
+      expose:
+          - 8080
+      env_file:
+          - .env
+      environment:
+          - PYTHON_ENGINE_URL=http://python-engine:8000
+          - PYTHON_XML_ENGINE_URL=http://python-xml-engine:8001
+          - JAVA_OPTS=-Xmx512m -Xms256m
+      depends_on:
+          python-engine:
+              condition: service_healthy
+          python-xml-engine:
+              condition: service_healthy
+      networks:
+          - mynetwork
+      healthcheck:
+          test:
+              [
+                  "CMD",
+                  "wget",
+                  "--quiet",
+                  "--tries=1",
+                  "--spider",
+                  "http://localhost:8080/health",
+              ]
+          interval: 30s
+          timeout: 10s
+          retries: 3
+          start_period: 15s
+      restart: unless-stopped
 
-  # Nginx Reverse Proxy (Optional - for production)
-  # nginx:
-  #   image: nginx:alpine
-  #   container_name: xlsx-nginx
-  #   ports:
-  #     - "80:80"
-  #     - "443:443"  # For HTTPS (requires SSL certificates)
-  #   volumes:
-  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-  #     # Uncomment for SSL
-  #     # - ./nginx/ssl:/etc/nginx/ssl:ro
-  #   depends_on:
-  #     - java-gateway
-  #   networks:
-  #     - xlsx-network
-  #   restart: unless-stopped
-  #   profiles:
-  #     - production  # Only start with: docker compose --profile production up
 
 networks:
-  xlsx-network:
-    driver: bridge
-    name: xlsx-pivot-network
+    mynetwork:
+      driver: bridge
+      name: xlsx-pivot-network
 
-# Optional: Volumes for persistent data (if needed in future)
-# volumes:
-#   xlsx-data:
-#     driver: local
+
+  # Python XLSX Processing Engine
+#   python-engine:
+#     build:
+#       context: ./python-engine
+#       dockerfile: Dockerfile
+#     container_name: xlsx-python-engine
+#     ports:
+#       - "8000:8000"  # Expose for debugging (optional)
+#     environment:
+#       - PYTHONUNBUFFERED=1 
+#       - LOG_LEVEL=INFO
+#     networks:
+#       - xlsx-network
+#     healthcheck:
+#       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 10s
+#     restart: unless-stopped
+
+#   # Python XML Generation Engine (Diploma Service)
+#   python-xml-engine:
+#     build:
+#       context: ./python-xml-engine
+#       dockerfile: Dockerfile
+#     container_name: xlsx-python-xml-engine
+#     ports:
+#       - "8001:8001"  # Expose for debugging (optional)
+#     environment:
+#       - PYTHONUNBUFFERED=1
+#       - LOG_LEVEL=INFO
+#     networks:
+#       - xlsx-network
+#     healthcheck:
+#       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health')"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 10s
+#     restart: unless-stopped
+
+#   # Java API Gateway (Takes)
+#   java-gateway:
+#     build:
+#       context: ./java-api
+#       dockerfile: Dockerfile
+#     container_name: xlsx-java-gateway
+#     ports:
+#       - "8080:8080"  # Public-facing port
+#     environment:
+#       # For Java inside Docker to reach host services, use host.docker.internal
+#       # (on Windows/Mac Docker Desktop; on Linux use the host IP)
+#       - PIVOT_ENGINE_BASE_URL=http://host.docker.internal:${PIVOT_API_PORT}
+#       - XML_API_BASE_URL=http://host.docker.internal:${XML_API_PORT}
+#       - JAVA_OPTS=-Xmx512m -Xms256m
+#     depends_on:
+#       python-engine:
+#         condition: service_healthy
+#     networks:
+#       - xlsx-network
+#     healthcheck:
+#       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+#       interval: 30s
+#       timeout: 10s
+#       retries: 3
+#       start_period: 15s
+#     restart: unless-stopped
+
+# networks:
+#   xlsx-network:
+#     driver: bridge
+#     name: xlsx-pivot-network

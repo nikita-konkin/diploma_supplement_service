@@ -248,7 +248,7 @@ class DiplomaXMLGenerator:
         # Process each student
         for _, student_row in df_students.iterrows():
             student_el = ET.SubElement(students_el, "Студент")
-            
+            logger.info("1. Parse student: %s", student_row['Фамилия'])
             # Find student's scores
             student_name = student_row['Фамилия']
             disciplines = None
@@ -267,7 +267,7 @@ class DiplomaXMLGenerator:
                        'ДатаРешенияГэк', 'НомерПротоколаГэк']:
                 if col in student_row.index:
                     add_element(student_el, col, str(student_row[col]))
-            
+            logger.info("2. Added student info for: %s", student_row['Фамилия'])
             # Add state exams
             exams_el = ET.SubElement(student_el, "Госэкзамены")
             exams_head = ET.SubElement(exams_el, "Заголовок")
@@ -281,25 +281,27 @@ class DiplomaXMLGenerator:
                 f'Выпускная квалификационная работа "{student_row.get("ТемаВКР", "")}"'
             )
             add_element(exam_el, 'Оценка', student_row.get('ОценкаВКР', ''))
-            
+            logger.info("3. Added state exam info for: %s", student_row['Фамилия'])
             # Add program volume
             vol_el = ET.SubElement(student_el, 'ОбъемОбрПрограммы')
             add_element(vol_el, 'ЗачЕд', self.config['edu_progr_vol'])
             
             vol_el_hours = ET.SubElement(student_el, 'ОбъемАудиторныхЧасов')
             add_element(vol_el_hours, 'ЧасНед', self.config['edu_progr_vol_contact'])
-            
+            logger.info("4. Added program volume info for: %s", student_row['Фамилия'])
             # Add qualification and other info
             add_element(student_el, 'Квалификация', self.config['qualification'])
             add_element(student_el, 'СрокОбучения', self.config['edu_term'])
             add_element(student_el, 'ПредседательГэк', self.config['gek_chairman'])
-            
+            add_element(student_el, 'НаименованиеСпец', " ".join(self.config["speciality"].split(" ")[1:]))
+            add_element(student_el, 'КодСпец', self.config["speciality"].split(" ")[0])
+            logger.info("5. Added qualification and program info for: %s", student_row['Фамилия'])
             # Add extra info
             extra_info_element = ET.SubElement(student_el, "ДополнительныеСведения")
             add_element(
                 extra_info_element,
                 'ДопСвед',
-                f'Наименование (профиль) образовательной программы: "{self.config["speciality"]}"'
+                f'Наименование (профиль) образовательной программы: "{" ".join(self.config["speciality"].split(" ")[1:])}"'
             )
             add_element(
                 extra_info_element,
@@ -315,6 +317,8 @@ class DiplomaXMLGenerator:
             
             facults_el = ET.SubElement(student_el, "Факультативы")
             disciplines_el = ET.SubElement(student_el, "Дисциплины")
+
+            logger.info("6. Processing disciplines for: %s", student_row['Фамилия'])
             
             # Process each discipline
             for discipline_full, rate in disciplines.items():
@@ -371,6 +375,8 @@ class DiplomaXMLGenerator:
                     add_element(exam_el2, 'Наименование', discipline_name)
                     add_element(exam_el2, 'Оценка', rate)
         
+        logger.info("Finished processing disciplines for: %s", student_row['Фамилия'])
+
         # Convert to string
         tree = ET.ElementTree(root)
         import io
