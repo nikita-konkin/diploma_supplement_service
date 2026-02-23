@@ -275,9 +275,23 @@ select:focus {
 }
 
 .description-text {
-    color: #666;
+    color: #292929;
     line-height: 1.6;
-    margin-bottom: 12px;
+    margin-bottom: 14px;
+}
+
+.text-important {
+    color: #ed0000;
+    font-weight: 600;
+}
+
+.description-text.important {
+    background: #f0f4ff;
+    padding: 16px;
+    border-radius: 4px;
+    border-left: 3px solid #667eea;
+    color: #130008;
+    font-weight: 600;
 }
 
 .description-list {
@@ -322,7 +336,7 @@ select:focus {
 
 .info-box.important {
     background: #f0f4ff;
-    border-left: 4px solid #667eea;
+    border-left: 4px solid #e74489;
     color: #3949ab;
 }
 
@@ -357,11 +371,11 @@ select:focus {
 
 .round-button {
     position: fixed;
-    bottom: 40px;
-    right: 40px;
+    bottom: 50px;
+    right: 50px;
     z-index: 1000;
-    width: 60px;
-    height: 60px;
+    width: 80px;
+    height: 80px;
     border-radius: 50%;
     display: flex;
     align-items: center;
