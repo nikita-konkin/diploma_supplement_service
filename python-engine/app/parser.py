@@ -184,6 +184,9 @@ def match_row(orig_name: str, row_name: str) -> Optional[str]:
     if 'курсовая' in row_name:
         return 'kurs'
     
+    if 'факультатив' in orig_name and row_base in orig_name:
+        return 'facultative'
+    
     # Prefix match (for grouped disciplines like "Дисциплина * 3")
     if '*' in orig_name:
         return 'prefix'
@@ -276,8 +279,8 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
     based on names from the discipline file.
     
     Args:
-        df_stud_scores: DataFrame with student scores
-        discipline_bytes: Bytes content of the discipline XLSX file
+        df_stud_scores: DataFrame with student scores (from the Dean's list)
+        discipline_bytes: Bytes content of the discipline XLSX file (template)
         
     Returns:
         DataFrame with matched disciplines and student scores
@@ -287,7 +290,7 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
     repaired_bytes = repair_excel_file(discipline_bytes)
     if repaired_bytes:
         df = pd.read_excel(io.BytesIO(repaired_bytes), engine='openpyxl')
-    logger.info(f"df = {df}")
+    # logger.info(f"df = {df}")
     # Read discipline names from Excel
     df_origin_names = pd.read_excel(
         io.BytesIO(discipline_bytes), 
@@ -296,7 +299,7 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
         engine='openpyxl'
     )
     logger.info(df_origin_names)
-    logger.info(df_origin_names.columns)
+    # logger.info(df_origin_names.columns)
     clean_cols = [re.sub(r'\s+', '', str(col).lower()) for col in df_origin_names.columns]
 
     target = 'обязательнаячасть'
@@ -322,7 +325,7 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
         for row_index, row in df_stud_scores.iterrows():
             if isinstance(orig_index, str) and isinstance(row_index, str):
                 match = match_row(orig_index, row_index)
-                
+                logger.info(f"Matching '{orig_index}' with '{row_index}': {match}")
                 if match is True or count_of_prefix != 0:
                     if prefix_base and count_of_prefix != 0:
                         new_index = f"{prefix_base}. {orig_index}"
@@ -345,7 +348,18 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
                     df_result.loc[orig_index] = np.nan
                     matched = True
                     break
-                    
+
+                elif match == 'facultative':
+                    logger.info(f"Matched facultative: {row_index}")
+                    print('Matched facultative:', row_index) 
+                    logger.info(f"Matched facultative: {row_index}")
+                    new_index = row_index.replace('дисциплина', 'факультатив')
+                    df_result = df_result.rename(index={orig_index: new_index})
+                    df_result.loc[new_index] = row
+                    # df_result.loc[orig_index] = np.nan
+                    matched = True
+                    break
+
                 elif match == 'kurs':
                     logger.info(f"Matched course work: {row_index}")
                     print(f"Matched course work: {row_index}")

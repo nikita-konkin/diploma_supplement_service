@@ -8,6 +8,7 @@
     </head>
     <body>
         <div class="container">
+            <a href="https://vk.com/konkinna" target="_blank" class="round-button">Связаться</a>
             <!-- Tabs -->
             <div class="tabs">
                 <button class="tab active" onclick="switchTab(0)">
@@ -84,12 +85,12 @@
                     <strong>📋 Описание (кратко):</strong>
                     • Оба файла должны быть в формате XLSX<br />
                     • Пример сводного документа успеваемости студентов:
-                    <a href="https://disk.yandex.ru/d/LvZgJE5FIG193w"
+                    <a href="https://disk.yandex.ru/d/LvZgJE5FIG193w" target="_blank"
                         >нажмите здесь</a
                     >
                     (Можно выгрузить через деканат)<br />
                     • Пример списка дисциплин:
-                    <a href="https://disk.yandex.ru/d/fvnxH2Znt6EZTA"
+                    <a href="https://disk.yandex.ru/d/fvnxH2Znt6EZTA" target="_blank"
                         >нажмите здесь</a
                     >
                     (Цветом выделены обязательные заголовки)<br />
@@ -98,12 +99,15 @@
                     взять из сводного документа успеваемости студентов, а уже в
                     созданной сводной таблице заменить на соответствующие
                     названия из учебного плана<br />
+                    • Раздел курсовых работ заполнится автоматически из сводного документа успеваемости студентов<br />
                     •
-                    <a href="https://disk.yandex.ru/i/SsPhokXMWgzYpg"
+                    <a href="https://disk.yandex.ru/i/SsPhokXMWgzYpg" target="_blank"
                         >Пример полученного сводного документа (таблицы)</a
                     ><br />
-                    •
-                    <a href="about-pivot"
+
+                </div>
+                <div class="info-box">  
+                    <a href="about-pivot" class="text-important"
                         >Что делать далее со сводной таблицей?</a
                     >
                 </div>
@@ -113,14 +117,18 @@
             <div class="tab-content" id="tab-xml">
                 <h1>📄 Создать XML документ</h1>
                 <p class="subtitle">
-                    Конвертировать <strong>проверенную</strong> сводную таблицу
+                    Данный сервис позволяет конвертировать <strong>проверенную</strong> сводную таблицу
                     в XML документ для программы КиберДИПЛОМ.
-                    <br />
+                    <br>
+                    <br>
                     <strong style="color: rebeccapurple"
-                        >Важно: После импорта сгенерированного XML документа в
-                        самой программе КиберДиплом нужно добавить поле
-                        "Государственный экзамен" во вкладке "Госаттестация" и
-                        соовтетственно саму оценку.</strong
+                        >Важно! После импорта сгенерированного XML документа в
+                        самой программе КиберДиплом нужно:<br>
+                        1. Добавить поле "Государственный экзамен" во вкладке "Госаттестация" и
+                        соовтетственно саму оценку.<br>
+                        2. Добавить руководителя (ФИО рекора).<br>
+                        3. Проверить, что все данные корректно отобразились в программе (особенно оценки, названия дисциплин и практик).<br>
+                        </strong
                     >
                 </p>
 
@@ -167,30 +175,6 @@
                         </div>
                     </div>
 
-                    <!--<div class="form-group">
-                        <label for="curriculumFile"
-                            >Учебный план
-                            <span class="optional"
-                                >(или таблица с зачетными единицами по
-                                дисциплин) (XLSX)</span
-                            ></label
-                        >
-                        <div class="file-input-wrapper">
-                            <label class="file-button" id="curriculumLabel">
-                                Выберите файл
-                                <input
-                                    type="file"
-                                    id="curriculumFile"
-                                    accept=".xlsx"
-                                />
-                            </label>
-                        </div>
-                        <div class="file-name" id="curriculumName">
-                            Файл не выбран (optional)
-                        </div>
-                    </div>-->
-
-                    <!-- Configuration -->
                     <h3
                         style="
                             margin-top: 30px;
@@ -238,7 +222,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="speciality">Специальность</label>
+                            <label for="speciality">Код и название специальности</label>
                             <input
                                 type="text"
                                 id="speciality"
