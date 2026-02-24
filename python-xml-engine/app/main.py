@@ -109,12 +109,6 @@ async def generate_xml(
         logger.info(f"Reading student info: {student_info.filename}")
         student_bytes = await student_info.read()
         
-        # curriculum_bytes = await curriculum.read()
-        # curriculum_bytes = None
-        # if curriculum:
-        #     logger.info(f"Reading curriculum: {curriculum.filename}")
-        #     curriculum_bytes = await curriculum.read()
-        
         # Parse pivot table
         df_disciplines = pd.read_excel(
             io.BytesIO(pivot_bytes),
@@ -145,26 +139,7 @@ async def generate_xml(
         
         # Initialize generator
         generator = DiplomaXMLGenerator(config)
-        
-        # Parse curriculum if provided
-        # df_plan = generator.parse_curriculum(curriculum_bytes)
-        
-        # Match credits from curriculum
-        # if not df_plan.empty:
-        #     df_disciplines = generator.match_credits(df_disciplines, df_plan)
-        
-        # Add postfixes to discipline names
-        # df_disciplines = generator.add_discipline_postfixes(df_disciplines)
-        
-        # Fix state exam credits
-        # df_disciplines = generator.fix_state_exam_credits(df_disciplines)
-        
-        # Add credits to discipline names
-        # df_disciplines['Дисциплины'] = (
-        #     df_disciplines['Дисциплины'] + '_' + 
-        #     df_disciplines['зачЕд'].astype(str)
-        # )
-        # df_disciplines.drop(columns=['зачЕд'], inplace=True)
+
         df_disciplines.set_index('Дисциплины', inplace=True)
         
         logger.info("Generating XML")

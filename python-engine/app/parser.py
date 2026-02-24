@@ -34,7 +34,6 @@ def clean_text(text) -> str:
     # Collapse multiple spaces and strip
     return ' '.join(cleaned.split())
 
-
 def parse_rating(df: pd.DataFrame, df_stud_scores: pd.DataFrame, stud_name: str) -> None:
     """
     Updates df_stud_scores with student ratings from df for a given student name.
@@ -74,7 +73,6 @@ def parse_rating(df: pd.DataFrame, df_stud_scores: pd.DataFrame, stud_name: str)
         # Set the rating - ensure proper type handling
         df_stud_scores.loc[new_index, stud_name] = rate
 
-
 def replace_index_occurrence(df: pd.DataFrame, old: str, new: str, occurrence: int = 0) -> pd.DataFrame:
     """
     Replace a specific occurrence of an index label.
@@ -105,7 +103,6 @@ def replace_index_occurrence(df: pd.DataFrame, old: str, new: str, occurrence: i
     
     df.index = idx
     return df
-
 
 def remove_index_occurrence(obj: pd.DataFrame, value: str, occurrence: int = 0) -> pd.DataFrame:
     """
@@ -142,7 +139,6 @@ def remove_index_occurrence(obj: pd.DataFrame, value: str, occurrence: int = 0) 
     # Drop by position (safe with duplicates)
     result = pd.concat([obj.iloc[:pos_to_drop], obj.iloc[pos_to_drop + 1:]])
     return result
-
 
 def match_row(orig_name: str, row_name: str) -> Optional[str]:
     """
@@ -392,7 +388,6 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
     # df_result2.index.name = 'Дисциплины'
     
     return df_result
-
 
 def process_student_workbook(
     scores_bytes: bytes,
