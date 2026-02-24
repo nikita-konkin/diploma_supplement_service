@@ -33,17 +33,14 @@ public final class App {
                 // Static JavaScript files (root level)
                 new FkRegex("^/script\\.js$", new TkScript()),
                 // Static CSS files (in css directory)
+                new FkRegex("/imgs/.+", new TkImgs()),
                 new FkRegex(
                     "/css/.+",
                     new TkWithType(new TkClasspath(), "text/css; charset=UTF-8")
                 ),
-                // Static JavaScript files
                 new FkRegex(
                     "/js/.+",
-                    new TkWithType(
-                        new TkClasspath(),
-                        "application/javascript; charset=UTF-8"
-                    )
+                    new TkWithType(new TkClasspath(), "application/javascript; charset=UTF-8")
                 ),
                 // Static Font files (from file system)
                 new FkRegex(
