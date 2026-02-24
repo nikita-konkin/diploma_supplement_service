@@ -129,7 +129,7 @@ pivotForm.addEventListener("submit", async (e) => {
     showStatus(
       "pivotStatus",
       "success",
-      "✓ Report generated successfully! Download started.",
+      "✓ Таблица создана успешно! Загрузка файла начата.",
     );
 
     setTimeout(() => {
@@ -166,7 +166,7 @@ xmlForm.addEventListener("submit", async (e) => {
   showStatus(
     "xmlStatus",
     "loading",
-    '<span class="spinner"></span>Generating XML, please wait...',
+    '<span class="spinner"></span>Генерация XML, пожалуйста, подождите...',
   );
 
   const formData = new FormData();
@@ -235,10 +235,10 @@ xmlForm.addEventListener("submit", async (e) => {
     showStatus(
       "xmlStatus",
       "success",
-      "✓ XML generated successfully! Download started.",
+      "✓ XML сгенерирован успешно! Загрузка файла начата.",
     );
   } catch (error) {
-    showStatus("xmlStatus", "error", `✗ Error: ${error.message}`);
+    showStatus("xmlStatus", "error", `✗ Ошибка: ${error.message}`);
   } finally {
     xmlSubmitBtn.disabled = false;
   }
