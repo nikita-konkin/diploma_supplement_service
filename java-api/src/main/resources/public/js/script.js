@@ -119,8 +119,7 @@ pivotForm.addEventListener("submit", async (e) => {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error || "Processing failed");
+      throw new Error(await responseError(response, "Processing failed"));
     }
 
     const blob = await response.blob();
@@ -209,8 +208,7 @@ xmlForm.addEventListener("submit", async (e) => {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error || "XML generation failed");
+      throw new Error(await responseError(response, "XML generation failed"));
     }
 
     const blob = await response.blob();
@@ -247,14 +245,38 @@ xmlForm.addEventListener("submit", async (e) => {
 function showStatus(elementId, type, message) {
   const status = document.getElementById(elementId);
   status.className = `status ${type}`;
-  status.innerHTML = message;
+  if (type === "loading") {
+    status.innerHTML = message;
+  } else {
+    status.textContent = message;
+  }
   status.style.display = "block";
 
-  if (type !== "loading") {
+  if (type === "success") {
     setTimeout(() => {
       status.style.display = "none";
     }, 5000);
   }
+}
+
+async function responseError(response, fallback) {
+  const body = await response.text();
+  if (!body) {
+    return fallback;
+  }
+  try {
+    const payload = JSON.parse(body);
+    const message = payload.detail || payload.error || payload.message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+    if (message) {
+      return JSON.stringify(message);
+    }
+  } catch (error) {
+    // Plain text errors from reverse proxies are still useful to the user.
+  }
+  return body;
 }
 
 function downloadFile(blob, filename) {

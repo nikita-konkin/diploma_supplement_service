@@ -6,6 +6,8 @@ import org.takes.Take;
 import org.takes.rs.RsWithBody;
 import org.takes.rs.RsWithStatus;
 import org.takes.rs.RsWithType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -25,13 +27,31 @@ import java.io.EOFException;
  * Proxies requests to Python XML generation service.
  */
 public final class TkGenerateXml implements Take {
-    
+
+    private static final Logger LOG = LoggerFactory.getLogger(TkGenerateXml.class);
     private static final String CRLF = "\r\n";
-    
+
+    private final String serviceUrl;
+    private final XmlEngine engine;
+
+    public TkGenerateXml() {
+        this(Config.xmlApiBase() + Config.xmlGeneratePath());
+    }
+
+    TkGenerateXml(final String serviceUrl) {
+        this.serviceUrl = serviceUrl;
+        this.engine = this::forwardToXmlService;
+    }
+
+    TkGenerateXml(final XmlEngine engine) {
+        this.serviceUrl = "injected XML engine";
+        this.engine = engine;
+    }
+
     @Override
     public Response act(final Request req) throws Exception {
         try {
-            System.out.println("TkGenerateXml: received request, starting processing");
+            LOG.info("Received XML generation request");
             
             // Parse multipart form data
             final Map<String, byte[]> files = new HashMap<>();
@@ -44,32 +64,24 @@ public final class TkGenerateXml implements Take {
             
             // Validate required files
             if (!files.containsKey("pivot_table") || !files.containsKey("student_info")) {
-                System.out.println("TkGenerateXml: Missing required files");
-                return new RsWithStatus(
-                    new RsWithType(
-                        new RsWithBody("{\"error\":\"pivot_table and student_info are required\"}"),
-                        "application/json"
-                    ),
-                    400
+                LOG.warn("Rejected XML request with missing files");
+                return ApiResponse.error(
+                    400,
+                    "pivot_table and student_info are required"
                 );
             }
             
             // Validate file sizes
             if (files.get("pivot_table").length == 0 || files.get("student_info").length == 0) {
-                System.out.println("TkGenerateXml: Files are empty");
-                return new RsWithStatus(
-                    new RsWithType(
-                        new RsWithBody("{\"error\":\"Uploaded files are empty\"}"),
-                        "application/json"
-                    ),
-                    400
-                );
+                LOG.warn("Rejected XML request with empty files");
+                return ApiResponse.error(400, "Uploaded files are empty");
             }
             
             // Forward to Python XML service
             System.out.println("TkGenerateXml: forwarding to XML service");
-            final byte[] result = this.forwardToXmlService(files, params);
+            final byte[] result = this.engine.generate(files, params);
             System.out.println("TkGenerateXml: received response from XML service, size=" + result.length);
+            LOG.info("XML generation completed with {} response bytes", result.length);
             
             // Return XML file
             return new RsWithType(
@@ -77,29 +89,20 @@ public final class TkGenerateXml implements Take {
                 "application/xml"
             );
             
-        } catch (final IllegalArgumentException e) {
-            System.out.println("TkGenerateXml: IllegalArgumentException - " + e.getMessage());
-            return new RsWithStatus(
-                new RsWithType(
-                    new RsWithBody(
-                        String.format("{\"error\":\"%s\"}", e.getMessage())
-                    ),
-                    "application/json"
-                ),
-                400
+        } catch (final DownstreamServiceException err) {
+            LOG.error(
+                "XML service failed with HTTP {}: {}",
+                err.status(),
+                err.getMessage(),
+                err
             );
+            return ApiResponse.error(err.status(), err.getMessage());
+        } catch (final IllegalArgumentException err) {
+            LOG.warn("Invalid XML request: {}", err.getMessage());
+            return ApiResponse.error(400, err.getMessage());
         } catch (final Exception e) {
-            System.out.println("TkGenerateXml: Exception - " + e.getClass().getName() + ": " + e.getMessage());
-            e.printStackTrace();
-            return new RsWithStatus(
-                new RsWithType(
-                    new RsWithBody(
-                        String.format("{\"error\":\"XML generation failed: %s\"}", e.getMessage())
-                    ),
-                    "application/json"
-                ),
-                500
-            );
+            LOG.error("XML generation request failed", e);
+            return ApiResponse.error(500, "XML generation failed: " + e.getMessage());
         }
     }
     
@@ -325,7 +328,7 @@ private int findBytes(byte[] array, byte[] target, int fromIndex) {
         System.out.println("TkGenerateXml.forwardToXmlService: Params to send: " + params.keySet());
         
         final String boundary = "----WebKitFormBoundary" + UUID.randomUUID().toString().replace("-", "");
-        final URL url = new URL(Config.xmlApiBase() + Config.xmlGeneratePath());
+        final URL url = new URL(this.serviceUrl);
         System.out.println("TkGenerateXml.forwardToXmlService: URL=" + url);
         
         final HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -369,16 +372,20 @@ private int findBytes(byte[] array, byte[] target, int fromIndex) {
             final int responseCode = connection.getResponseCode();
             System.out.println("TkGenerateXml.forwardToXmlService: Response code=" + responseCode);
             
-            if (responseCode != 200) {
+            if (responseCode < 200 || responseCode >= 300) {
                 System.out.println("TkGenerateXml.forwardToXmlService: Error response code " + responseCode);
-                // Read error stream
+                String error = "";
                 try (InputStream errorStream = connection.getErrorStream()) {
                     if (errorStream != null) {
-                        String error = new String(readAllBytes(errorStream), StandardCharsets.UTF_8);
+                        error = new String(readAllBytes(errorStream), StandardCharsets.UTF_8);
                         System.out.println("TkGenerateXml.forwardToXmlService: Error response: " + error);
                     }
                 }
-                throw new RuntimeException("Python service returned status " + responseCode);
+                throw DownstreamServiceException.from(
+                    responseCode,
+                    error,
+                    "Python XML service"
+                );
             }
             
             System.out.println("TkGenerateXml.forwardToXmlService: Reading response...");
@@ -388,10 +395,6 @@ private int findBytes(byte[] array, byte[] target, int fromIndex) {
                 return result;
             }
             
-        } catch (Exception e) {
-            System.out.println("TkGenerateXml.forwardToXmlService: ERROR - " + e.getClass().getName() + ": " + e.getMessage());
-            e.printStackTrace();
-            throw e;
         } finally {
             connection.disconnect();
         }

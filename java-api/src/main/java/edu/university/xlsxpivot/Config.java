@@ -31,7 +31,10 @@ public final class Config {
     }
 
     public static String xmlApiBase() {
-        return get("XML_API_BASE_URL", "xn----etb9agicel.xn--p1ai");
+        return get(
+            "XML_API_BASE_URL",
+            get("PYTHON_XML_ENGINE_URL", "http://python-xml-engine:8001")
+        );
     }
 
     public static String xmlGeneratePath() {

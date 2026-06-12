@@ -6,6 +6,8 @@ import org.takes.Take;
 import org.takes.rs.RsWithBody;
 import org.takes.rs.RsWithStatus;
 import org.takes.rs.RsWithType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -19,8 +21,10 @@ import java.io.EOFException;
  * Accepts multipart form data with two XLSX files and returns a processed report.
  */
 public final class TkPivot implements Take {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TkPivot.class);
     
-    private final PyEngineClient client;
+    private final PivotEngine client;
     
     /**
      * Constructor with default Python engine URL.
@@ -40,14 +44,14 @@ public final class TkPivot implements Take {
      * 
      * @param client Python engine HTTP client
      */
-    public TkPivot(final PyEngineClient client) {
+    public TkPivot(final PivotEngine client) {
         this.client = client;
     }
     
     @Override
     public Response act(final Request req) throws Exception {
     
-        System.out.println("TkPivot: received request, starting processing");
+        LOG.info("Received pivot request");
         try {
             // Parse multipart form data manually
             final Map<String, byte[]> files = this.parseMultipart(req);
@@ -59,30 +63,24 @@ public final class TkPivot implements Take {
             
             // Validate file presence
             if (scoresBytes == null || disciplinesBytes == null) {
-                return new RsWithStatus(
-                    new RsWithType(
-                        new RsWithBody("{\"error\":\"Both scores_xlsx and disciplines_xlsx are required\"}"),
-                        "application/json"
-                    ),
-                    400
+                LOG.warn("Rejected pivot request with missing files");
+                return ApiResponse.error(
+                    400,
+                    "Both scores_xlsx and disciplines_xlsx are required"
                 );
             }
             
             // Validate file sizes
             if (scoresBytes.length == 0 || disciplinesBytes.length == 0) {
-                return new RsWithStatus(
-                    new RsWithType(
-                        new RsWithBody("{\"error\":\"Uploaded files are empty\"}"),
-                        "application/json"
-                    ),
-                    400
-                );
+                LOG.warn("Rejected pivot request with empty files");
+                return ApiResponse.error(400, "Uploaded files are empty");
             }
             
             // Forward to Python engine
             System.out.println("TkPivot: forwarding to Python engine");
             final byte[] result = this.client.processPivot(scoresBytes, disciplinesBytes);
             System.out.println("TkPivot: received response from Python engine, size=" + (result == null ? 0 : result.length));
+            LOG.info("Pivot request completed with {} response bytes", result.length);
             
             // Return processed XLSX file
             return new RsWithType(
@@ -90,26 +88,20 @@ public final class TkPivot implements Take {
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             );
             
-        } catch (final IllegalArgumentException e) {
-            return new RsWithStatus(
-                new RsWithType(
-                    new RsWithBody(
-                        String.format("{\"error\":\"%s\"}", e.getMessage())
-                    ),
-                    "application/json"
-                ),
-                400
+        } catch (final DownstreamServiceException err) {
+            LOG.error(
+                "Pivot service failed with HTTP {}: {}",
+                err.status(),
+                err.getMessage(),
+                err
             );
+            return ApiResponse.error(err.status(), err.getMessage());
+        } catch (final IllegalArgumentException err) {
+            LOG.warn("Invalid pivot request: {}", err.getMessage());
+            return ApiResponse.error(400, err.getMessage());
         } catch (final Exception e) {
-            return new RsWithStatus(
-                new RsWithType(
-                    new RsWithBody(
-                        String.format("{\"error\":\"Processing failed: %s\"}", e.getMessage())
-                    ),
-                    "application/json"
-                ),
-                500
-            );
+            LOG.error("Pivot request failed", e);
+            return ApiResponse.error(500, "Processing failed: " + e.getMessage());
         }
     }
     
@@ -139,9 +131,6 @@ private Map<String, byte[]> parseMultipart(final Request req) throws IOException
     System.out.println("TkPivot.parseMultipart: Content-Length=" + length);
     final byte[] body = this.readFixedBytes(req.body(), length);
     System.out.println("TkPivot.parseMultipart: Body size=" + body.length);
-    
-    // Save raw body for debugging
-    saveDebugFile("/tmp/raw_body.bin", body);
     
     // Find first boundary
     int pos = findBytes(body, boundaryBytes, 0);
@@ -199,9 +188,6 @@ private Map<String, byte[]> parseMultipart(final Request req) throws IOException
                 
                 System.out.println("TkPivot.parseMultipart: Extracted " + fieldName + 
                                  " (" + fileContent.length + " bytes)");
-                
-                // Save for debugging
-                saveDebugFile("/tmp/" + fieldName + ".xlsx", fileContent);
                 
                 // Check signature
                 checkFileSignature(fieldName, fileContent);
@@ -287,25 +273,12 @@ private String extractFieldName(String headers) {
     return headers.substring(nameStart + 6, nameEnd);
 }
 
-private void saveDebugFile(String filename, byte[] data) {
-    try {
-        java.nio.file.Files.write(java.nio.file.Paths.get(filename), data);
-        System.out.println("Saved debug file: " + filename);
-    } catch (Exception e) {
-        System.out.println("Could not save debug file: " + e.getMessage());
-    }
-}
-
 private void checkFileSignature(String fieldName, byte[] data) {
     if (data.length >= 4) {
         if (data[0] == 'P' && data[1] == 'K' && data[2] == 3 && data[3] == 4) {
-            System.out.println("✓ " + fieldName + ": Valid Excel signature");
+            LOG.debug("{} has a valid XLSX signature", fieldName);
         } else {
-            System.out.print("✗ " + fieldName + ": Invalid signature - ");
-            for (int i = 0; i < Math.min(4, data.length); i++) {
-                System.out.print(String.format("%02X ", data[i] & 0xFF));
-            }
-            System.out.println();
+            LOG.warn("{} does not have a valid XLSX signature", fieldName);
         }
     }
 }

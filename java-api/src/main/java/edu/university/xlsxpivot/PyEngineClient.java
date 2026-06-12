@@ -13,7 +13,7 @@ import java.util.UUID;
  * HTTP client for communicating with the Python XLSX processing engine.
  * Handles multipart/form-data requests and binary responses.
  */
-public final class PyEngineClient {
+public final class PyEngineClient implements PivotEngine {
     
     private static final int BUFFER_SIZE = 8192;
     private static final int TIMEOUT_MS = 300000; // 5 minutes
@@ -37,6 +37,7 @@ public final class PyEngineClient {
      * @return Processed XLSX file bytes
      * @throws IOException If communication with Python engine fails
      */
+    @Override
     public byte[] processPivot(final byte[] scoresBytes, final byte[] disciplinesBytes) throws IOException {
         final String boundary = "----WebKitFormBoundary" + UUID.randomUUID().toString().replace("-", "");
         final URL url = new URL(this.baseUrl + "/pivot");
@@ -72,10 +73,12 @@ public final class PyEngineClient {
                 final byte[] errorBytes = this.readStream(connection.getErrorStream());
                 final String error = new String(errorBytes, StandardCharsets.UTF_8);
 
-                throw new IOException(
-                    String.format("Python engine returned status %d: %s", status, error)
+                throw DownstreamServiceException.from(
+                    status,
+                    error,
+                    "Python pivot service"
                 );
-}
+            }
             
             // Read response
             return this.readStream(connection.getInputStream());
