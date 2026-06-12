@@ -6,6 +6,7 @@ import org.takes.Request;
 import org.takes.Response;
 import org.takes.Take;
 import org.takes.rs.RsWithBody;
+import org.takes.rs.RsWithHeader;
 import org.takes.rs.RsWithStatus;
 import org.takes.rs.RsWithType;
 
@@ -32,9 +33,13 @@ public final class TkScript implements Take {
             buf.write(tmp, 0, r);
         }
         in.close();
-        return new RsWithType(
-            new RsWithBody(buf.toByteArray()),
-            "application/javascript; charset=UTF-8"
+        return new RsWithHeader(
+            new RsWithType(
+                new RsWithBody(buf.toByteArray()),
+                "application/javascript; charset=UTF-8"
+            ),
+            "Cache-Control",
+            "no-store, max-age=0"
         );
     }
 }
