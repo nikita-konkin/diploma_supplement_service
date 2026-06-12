@@ -36,7 +36,7 @@ public final class App {
                 // Static CSS files (root level)
                 new FkRegex("^/styles\\.css$", new TkStyles()),
                 // Static JavaScript files (root level)
-                new FkRegex("^/script\\.js$", new TkScript()),
+                new FkRegex("^/script\\.js(?:\\?.*)?$", new TkScript()),
                 // Static CSS files (in css directory)
                 new FkRegex("/imgs/.+", new TkImgs()),
                 new FkRegex(
