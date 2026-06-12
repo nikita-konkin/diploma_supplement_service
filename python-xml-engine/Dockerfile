@@ -7,6 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     gcc \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -17,12 +18,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY app/ ./app/
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # Create non-root user for security
 RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
-
-USER appuser
+    chown -R appuser:appuser /app && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Expose port
 EXPOSE 8001
@@ -32,4 +33,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8001/health')" || exit 1
 
 # Run the application
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

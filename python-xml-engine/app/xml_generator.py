@@ -12,6 +12,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def date_only(value, field_name: str) -> str:
+    """Return an Excel date value without its time component."""
+    if pd.isna(value):
+        return ""
+    parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
+    if pd.isna(parsed):
+        raise ValueError(f"{field_name} contains an invalid date: {value}")
+    return parsed.date().isoformat()
+
+
 def add_element(parent: ET.Element, tag: str, value) -> ET.Element:
     """Add XML element with text value."""
     el = ET.SubElement(parent, tag)
@@ -79,10 +89,12 @@ class DiplomaXMLGenerator:
         
         df_students.drop(columns=['ФИО', 'Отчество2'], inplace=True, errors='ignore')
         
-        # Convert dates to strings
+        # CyberDiploma date fields must not contain a time component.
         for date_col in ['ДатаРожд', 'ДатаРешенияГэк']:
             if date_col in df_students.columns:
-                df_students[date_col] = df_students[date_col].astype(str)
+                df_students[date_col] = df_students[date_col].apply(
+                    lambda value: date_only(value, date_col)
+                )
         
         # Process each student
         for _, student_row in df_students.iterrows():

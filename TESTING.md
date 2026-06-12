@@ -44,3 +44,13 @@ repository-level `logs/` directory. Files are separated by service and purpose:
 
 Logs rotate at 10 MB. Event files contain INFO/WARN records; error files contain
 ERROR records and stack traces.
+
+Each service writes a startup record immediately. Docker entrypoints create and
+fix ownership of the shared `/app/logs` bind mount before starting as a non-root
+user, so health checks and application requests appear in the event files.
+
+## XML dates
+
+`ДатаРожд` and `ДатаРешенияГэк` are validated and serialized as ISO dates in
+`YYYY-MM-DD` form. Time components from Excel timestamps are removed; invalid
+date values produce a validation error instead of malformed XML.

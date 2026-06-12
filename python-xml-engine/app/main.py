@@ -5,10 +5,11 @@ Converts pivot tables to CyberDiploma XML format.
 
 import io
 import logging
+import time
 from typing import Optional
 from datetime import datetime
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, status, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request, status, Form
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
@@ -36,6 +37,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_request(request: Request, call_next):
+    """Record every completed HTTP request in the event log."""
+    started = time.monotonic()
+    response = await call_next(request)
+    logger.info(
+        "%s %s -> %s in %.3fs",
+        request.method,
+        request.url.path,
+        response.status_code,
+        time.monotonic() - started,
+    )
+    return response
 
 
 @app.get("/")

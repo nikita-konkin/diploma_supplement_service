@@ -5,10 +5,11 @@ Handles file uploads, processes student scores, and returns consolidated reports
 
 import io
 import logging
+import time
 from typing import Dict, Any
 from datetime import datetime
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
@@ -36,6 +37,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_request(request: Request, call_next):
+    """Record every completed HTTP request in the event log."""
+    started = time.monotonic()
+    response = await call_next(request)
+    logger.info(
+        "%s %s -> %s in %.3fs",
+        request.method,
+        request.url.path,
+        response.status_code,
+        time.monotonic() - started,
+    )
+    return response
 
 
 def highlight_problematic_cells(output_bytes: bytes) -> bytes:
