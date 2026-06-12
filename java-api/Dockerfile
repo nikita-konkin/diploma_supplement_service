@@ -33,7 +33,7 @@ COPY --from=builder /build/src/main/resources ./resources
 
 # Create non-root user for security
 RUN addgroup -S appgroup && \
-    adduser -S appuser -G appgroup && \
+    adduser -S -u 1000 appuser -G appgroup && \
     chown -R appuser:appgroup /app
 
 USER appuser

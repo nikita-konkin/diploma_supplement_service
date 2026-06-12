@@ -14,14 +14,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 
 from .xml_generator import DiplomaXMLGenerator
+from .logging_config import configure_logging
 from urllib.parse import quote
 import re
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+configure_logging("python-xml-engine")
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
@@ -171,7 +168,8 @@ async def generate_xml(
             }
         )
     
-    except HTTPException:
+    except HTTPException as error:
+        logger.warning("XML request rejected: %s", error.detail)
         raise
     
     except ValueError as e:
@@ -182,7 +180,7 @@ async def generate_xml(
         )
     
     except Exception as e:
-        logger.error(f"Processing error: {str(e)}", exc_info=True)
+        logger.exception("Processing error: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate XML: {str(e)}"

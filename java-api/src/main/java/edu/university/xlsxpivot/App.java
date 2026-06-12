@@ -8,12 +8,16 @@ import org.takes.http.FtBasic;
 import org.takes.tk.TkClasspath;
 import org.takes.tk.TkFiles;
 import org.takes.tk.TkWithType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Main application entry point.
  * Serves both the front-end HTML and API endpoints.
  */
 public final class App {
+
+    private static final Logger LOG = LoggerFactory.getLogger(App.class);
 
     /**
      * Application entry point.
@@ -22,6 +26,7 @@ public final class App {
      * @throws Exception If server fails to start
      */
     public static void main(final String... args) throws Exception {
+        LOG.info("Starting Java gateway on port {}", Config.apiPort());
         new FtBasic(
             new TkFork(
                 // Front-end: Serve HTML upload page at root using a small Take

@@ -12,6 +12,9 @@ services:
       environment:
           - PYTHONUNBUFFERED=1
           - LOG_LEVEL=INFO
+          - LOG_DIR=/app/logs
+      volumes:
+          - ./logs:/app/logs
       networks:
           - mynetwork
       healthcheck:
@@ -38,6 +41,9 @@ services:
       environment:
           - PYTHONUNBUFFERED=1
           - LOG_LEVEL=INFO
+          - LOG_DIR=/app/logs
+      volumes:
+          - ./logs:/app/logs
       networks:
           - mynetwork
       healthcheck:
@@ -66,7 +72,11 @@ services:
       environment:
           - PYTHON_ENGINE_URL=http://python-engine:8000
           - PYTHON_XML_ENGINE_URL=http://python-xml-engine:8001
+          - XML_API_BASE_URL=http://python-xml-engine:8001
+          - LOG_DIR=/app/logs
           - JAVA_OPTS=-Xmx512m -Xms256m
+      volumes:
+          - ./logs:/app/logs
       depends_on:
           python-engine:
               condition: service_healthy

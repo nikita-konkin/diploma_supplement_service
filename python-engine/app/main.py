@@ -16,12 +16,9 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
 from .parser import process_student_workbook
+from .logging_config import configure_logging
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+configure_logging("python-engine")
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
@@ -234,8 +231,8 @@ async def create_pivot(
             }
         )
     
-    except HTTPException:
-        # Re-raise HTTP exceptions
+    except HTTPException as error:
+        logger.warning("Pivot request rejected: %s", error.detail)
         raise
     
     except pd.errors.EmptyDataError as e:
@@ -253,7 +250,7 @@ async def create_pivot(
         )
     
     except Exception as e:
-        logger.error(f"Processing error: {str(e)}", exc_info=True)
+        logger.exception("Processing error: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process workbooks: {str(e)}"

@@ -1,0 +1,64 @@
+package edu.university.xlsxpivot;
+
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import org.junit.Test;
+import org.takes.Request;
+import org.takes.rq.RqFake;
+import org.takes.rs.RsPrint;
+
+import static org.hamcrest.CoreMatchers.allOf;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.junit.Assert.assertThat;
+
+public final class TkGenerateXmlTest {
+
+    @Test
+    public void cannotHideXmlServiceFailure() throws Exception {
+        final XmlEngine engine = (files, params) -> {
+            throw new DownstreamServiceException(
+                500,
+                "None of ['Дисциплины'] are in the columns"
+            );
+        };
+        assertThat(
+            "XML endpoint hid the Python processing failure",
+            new RsPrint(new TkGenerateXml(engine).act(TkGenerateXmlTest.request())).print(),
+            allOf(
+                containsString("HTTP/1.1 500"),
+                containsString("None of ['Дисциплины'] are in the columns")
+            )
+        );
+    }
+
+    private static Request request() throws Exception {
+        final String boundary = "angry-xml-boundary";
+        final ByteArrayOutputStream body = new ByteArrayOutputStream();
+        TkGenerateXmlTest.file(body, boundary, "pivot_table");
+        TkGenerateXmlTest.file(body, boundary, "student_info");
+        body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        return new RqFake(
+            Arrays.asList(
+                "POST /generate-xml HTTP/1.1",
+                "Content-Type: multipart/form-data; boundary=" + boundary,
+                "Content-Length: " + body.size()
+            ),
+            body.toByteArray()
+        );
+    }
+
+    private static void file(
+        final ByteArrayOutputStream body,
+        final String boundary,
+        final String name
+    ) throws Exception {
+        body.write((
+            "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"" + name
+                + "\"; filename=\"file.xlsx\"\r\n"
+                + "Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n"
+                + "PK-test-content\r\n"
+        ).getBytes(StandardCharsets.UTF_8));
+    }
+}
