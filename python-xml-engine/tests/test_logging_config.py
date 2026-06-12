@@ -12,3 +12,10 @@ def test_cannot_mix_events_with_errors(tmp_path):
         "fatal generation failure" not in (tmp_path / "angry-xml-events.log").read_text("utf-8"),
         "fatal generation failure" in (tmp_path / "angry-xml-errors.log").read_text("utf-8"),
     ) == (True, True, True), "Logging mixed routine events with failures"
+
+
+def test_cannot_start_without_event_log(tmp_path):
+    configure_logging("angry-xml-startup", tmp_path)
+    assert "Logging initialized" in (
+        tmp_path / "angry-xml-startup-events.log"
+    ).read_text("utf-8"), "XML service started without writing an event log"

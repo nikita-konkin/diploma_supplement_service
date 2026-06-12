@@ -20,8 +20,8 @@ RUN mvn clean package -DskipTests
 # Stage 2: Runtime
 FROM eclipse-temurin:17-jre-alpine
 
-# Install curl for healthcheck
-RUN apk add --no-cache curl
+# Install curl for healthcheck and su-exec for privilege dropping
+RUN apk add --no-cache curl su-exec
 
 WORKDIR /app
 
@@ -30,13 +30,13 @@ COPY --from=builder /build/target/xlsx-pivot-gateway.jar ./app.jar
 
 # Copy static resources (if not already in JAR)
 COPY --from=builder /build/src/main/resources ./resources
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # Create non-root user for security
 RUN addgroup -S appgroup && \
     adduser -S -u 1000 appuser -G appgroup && \
-    chown -R appuser:appgroup /app
-
-USER appuser
+    chown -R appuser:appgroup /app && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Expose port
 EXPOSE 8080
@@ -47,4 +47,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 
 # Run the application --- include the copied resources directory on the classpath
 # Use -cp and the main class so the external resources folder is visible on the classpath
-ENTRYPOINT ["java", "-cp", "/app/resources:/app/app.jar", "edu.university.xlsxpivot.App"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["sh", "-c", "exec java ${JAVA_OPTS:-} -cp /app/resources:/app/app.jar edu.university.xlsxpivot.App"]

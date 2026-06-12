@@ -28,6 +28,8 @@ def configure_logging(
         "%(asctime)s %(levelname)-5s [%(process)d] %(name)s - %(message)s"
     )
     application = logging.getLogger("app")
+    for handler in application.handlers:
+        handler.close()
     application.handlers.clear()
     application.setLevel(level)
     application.propagate = False
@@ -57,4 +59,5 @@ def configure_logging(
     application.addHandler(console)
     application.addHandler(events)
     application.addHandler(errors)
+    application.info("Logging initialized in %s", target.resolve())
     return target
