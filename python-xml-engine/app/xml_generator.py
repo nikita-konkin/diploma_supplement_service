@@ -76,6 +76,13 @@ def text_value(value) -> str:
     return ' '.join(str(value).split())
 
 
+DATE_TEXT_FORMATS = (
+    (re.compile(r'^\d{1,2}\.\d{1,2}\.\d{4}$'), '%d.%m.%Y'),
+    (re.compile(r'^\d{4}-\d{2}-\d{2}$'), '%Y-%m-%d'),
+    (re.compile(r'^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$'), 'ISO8601'),
+)
+
+
 def date_only(value, field_name: str) -> str:
     """Return an Excel date value without its time component."""
     if is_blank(value):
@@ -85,9 +92,24 @@ def date_only(value, field_name: str) -> str:
             f'{field_name}: дата записана числом ({text_value(value)}), '
             'установите для ячейки формат «Дата»'
         )
-    parsed = pd.to_datetime(value, errors='coerce', dayfirst=True)
+    if isinstance(value, str):
+        # dayfirst would also swap day and month of an ISO date, so the two
+        # accepted text forms are parsed with explicit formats
+        text = value.strip()
+        text_format = next(
+            (f for pattern, f in DATE_TEXT_FORMATS if pattern.match(text)), None
+        )
+        parsed = (
+            pd.to_datetime(text, format=text_format, errors='coerce')
+            if text_format else pd.NaT
+        )
+    else:
+        parsed = pd.to_datetime(value, errors='coerce')
     if pd.isna(parsed):
-        raise ValueError(f'{field_name}: не удалось распознать дату «{value}»')
+        raise ValueError(
+            f'{field_name}: не удалось распознать дату «{value}», '
+            'ожидается ДД.ММ.ГГГГ'
+        )
     return parsed.date().isoformat()
 
 
@@ -276,8 +298,9 @@ class DiplomaXMLGenerator:
                     del mapping[r]
         unused = [c for c in columns if c not in claimed]
         if unused:
+            # Count only: the column names are student names (personal data)
             logger.warning(
-                'Pivot columns without a student in the info file: %s', unused
+                'Pivot has %d columns without a student in the info file', len(unused)
             )
         return mapping
 
@@ -369,6 +392,10 @@ class DiplomaXMLGenerator:
             students.append((index, student))
             people.append((index, label, person_key(last, first, middle)))
 
+        if not students and not problems:
+            raise DataValidationError(
+                ['В файле сведений о студентах нет ни одной заполненной строки']
+            )
         mapping = self.match_students(people, list(df_disciplines.columns), problems)
 
         root = ET.Element("ФайлОбменаКиберДиплом", Версия="3.5.1")
@@ -381,14 +408,14 @@ class DiplomaXMLGenerator:
             disciplines = df_disciplines[mapping[index]]
             label = student['label']
             student_el = ET.SubElement(students_el, "Студент")
-            logger.info("1. Parse student: %s", student['Фамилия'])
+            logger.debug("1. Parse student at info row %d", index + 2)
 
             # Add student info
             for col in ['Фамилия', 'Имя', 'Отчество', 'ДатаРожд',
                         'НаименованиеДокПредОбр', 'ГодДокПредОбр',
                         'ДатаРешенияГэк', 'НомерПротоколаГэк']:
                 add_element(student_el, col, student.get(col, ''))
-            logger.info("2. Added student info for: %s", student['Фамилия'])
+            logger.debug("2. Added student info for info row %d", index + 2)
             # Add state exams
             exams_el = ET.SubElement(student_el, "Госэкзамены")
             exams_head = ET.SubElement(exams_el, "Заголовок")
@@ -419,21 +446,21 @@ class DiplomaXMLGenerator:
                 f'Выпускная квалификационная работа "{student["ТемаВКР"]}"'
             )
             add_element(exam_el, 'Оценка', student['ОценкаВКР'])
-            logger.info("3. Added state exam info for: %s", student['Фамилия'])
+            logger.debug("3. Added state exam info for info row %d", index + 2)
             # Add program volume
             vol_el = ET.SubElement(student_el, 'ОбъемОбрПрограммы')
             add_element(vol_el, 'ЗачЕд', self.config['edu_progr_vol'])
 
             vol_el_hours = ET.SubElement(student_el, 'ОбъемАудиторныхЧасов')
             add_element(vol_el_hours, 'ЧасНед', self.config['edu_progr_vol_contact'])
-            logger.info("4. Added program volume info for: %s", student['Фамилия'])
+            logger.debug("4. Added program volume info for info row %d", index + 2)
             # Add qualification and other info
             add_element(student_el, 'Квалификация', self.config['qualification'])
             add_element(student_el, 'СрокОбучения', self.config['edu_term'])
             add_element(student_el, 'ПредседательГэк', self.config['gek_chairman'])
             add_element(student_el, 'НаименованиеСпец', self.direction_name)
             add_element(student_el, 'КодСпец', self.direction_code)
-            logger.info("5. Added qualification and program info for: %s", student['Фамилия'])
+            logger.debug("5. Added qualification and program info for info row %d", index + 2)
             # Add extra info
             extra_info_element = ET.SubElement(student_el, "ДополнительныеСведения")
             add_element(
@@ -456,7 +483,7 @@ class DiplomaXMLGenerator:
             facults_el = ET.SubElement(student_el, "Факультативы")
             disciplines_el = ET.SubElement(student_el, "Дисциплины")
 
-            logger.info("6. Processing disciplines for: %s", student['Фамилия'])
+            logger.debug("6. Processing disciplines for info row %d", index + 2)
 
             graded = 0
             # Process each discipline
@@ -544,7 +571,7 @@ class DiplomaXMLGenerator:
 
             if not graded:
                 problems.append(f'{label}: в сводной нет ни одной оценки')
-            logger.info("Finished processing disciplines for: %s", student['Фамилия'])
+            logger.debug("Finished processing disciplines for info row %d", index + 2)
 
         problems.extend(dict.fromkeys(row_problems))
         if problems:

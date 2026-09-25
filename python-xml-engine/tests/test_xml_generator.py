@@ -346,3 +346,30 @@ def test_cannot_add_state_exam_when_row_is_empty():
     xml = generator().generate_xml(state_exam_pivot(None), students())
     count = len(ET.fromstring(xml).findall(".//Госэкзамен"))
     assert count == 1, "An empty state exam row produced a state exam entry"
+
+
+def test_cannot_produce_xml_without_students():
+    message = problems_of(
+        lambda: generator().generate_xml(
+            disciplines(), pd.DataFrame(columns=list(student()))
+        )
+    )
+    assert "нет ни одной заполненной строки" in message, (
+        "An empty student file produced an XML without students"
+    )
+
+
+def test_cannot_swap_day_and_month_of_iso_date():
+    xml = generator().generate_xml(
+        disciplines(), students(student(ДатаРожд="2001-02-03"))
+    )
+    birth_date = ET.fromstring(xml).findtext(".//ДатаРожд")
+    assert birth_date == "2001-02-03", "An ISO birth date had its day and month swapped"
+
+
+def test_cannot_misread_russian_date_text():
+    xml = generator().generate_xml(
+        disciplines(), students(student(ДатаРешенияГэк="24.06.2026"))
+    )
+    decision = ET.fromstring(xml).findtext(".//ДатаРешенияГэк")
+    assert decision == "2026-06-24", "A ДД.ММ.ГГГГ date was misread"
