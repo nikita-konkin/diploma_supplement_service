@@ -6,7 +6,7 @@ Handles file uploads, processes student scores, and returns consolidated reports
 import io
 import logging
 import time
-from typing import Dict
+from typing import Dict, Optional, Set
 from datetime import datetime
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, status
@@ -47,12 +47,17 @@ async def log_request(request: Request, call_next):
     return response
 
 
-def highlight_problematic_cells(output_bytes: bytes) -> bytes:
+CHECK_SHEET = 'Проверка з.е.'
+
+
+def highlight_problematic_cells(output_bytes: bytes, review: Set[str] = frozenset()) -> bytes:
     """
-    Highlights cells with missing values, '!', or '?' symbols in the Excel file.
-    
+    Highlights cells with missing values, '!', or '?' symbols in the Excel file,
+    and the pivot rows whose credits the operator has to check.
+
     Args:
         output_bytes: Bytes content of the Excel file
+        review: Report row labels whose credits need checking
         
     Returns:
         Modified bytes with highlighted cells
@@ -63,6 +68,7 @@ def highlight_problematic_cells(output_bytes: bytes) -> bytes:
     # Define fill colors
     yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')  # Yellow for missing
     red_fill = PatternFill(start_color='FF6B6B', end_color='FF6B6B', fill_type='solid')     # Light red for ! and ?
+    orange_fill = PatternFill(start_color='FFC000', end_color='FFC000', fill_type='solid')  # Credits to check
     
     # Process Report sheet
     if 'Report' in wb.sheetnames:
@@ -93,6 +99,17 @@ def highlight_problematic_cells(output_bytes: bytes) -> bytes:
                     except ValueError:
                         pass  # Not a digit, skip
     
+        for row_idx in range(2, ws.max_row + 1):
+            if ws.cell(row=row_idx, column=1).value in review:
+                ws.cell(row=row_idx, column=1).fill = orange_fill
+
+    if CHECK_SHEET in wb.sheetnames:
+        ws = wb[CHECK_SHEET]
+        for row_idx in range(2, ws.max_row + 1):
+            if ws.cell(row=row_idx, column=ws.max_column).value:
+                for col_idx in range(1, ws.max_column + 1):
+                    ws.cell(row=row_idx, column=col_idx).fill = orange_fill
+
     # Process RawScores sheet
     if 'RawScores' in wb.sheetnames:
         ws = wb['RawScores']
@@ -144,7 +161,10 @@ async def health() -> Dict[str, str]:
 @app.post("/pivot")
 async def create_pivot(
     scores_xlsx: UploadFile = File(..., description="Student scores workbook (XLSX or XLS)"),
-    disciplines_xlsx: UploadFile = File(..., description="Discipline list workbook (XLSX or XLS)")
+    disciplines_xlsx: UploadFile = File(..., description="Discipline list workbook (XLSX or XLS)"),
+    curriculum_xlsx: Optional[UploadFile] = File(
+        None, description="Curriculum from «Планы», the source of credits (optional)"
+    ),
 ) -> StreamingResponse:
     """
     Process student scores and create a consolidated pivot report.
@@ -168,7 +188,8 @@ async def create_pivot(
         
         logger.info(f"Reading disciplines file: {disciplines_xlsx.filename}")
         disciplines_content = await disciplines_xlsx.read()
-        
+        curriculum_content = await curriculum_xlsx.read() if curriculum_xlsx else None
+
         if len(scores_content) == 0 or len(disciplines_content) == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -182,9 +203,10 @@ async def create_pivot(
         )
 
         # Process the workbooks
-        df_raw_scores, df_report = process_student_workbook(
+        df_raw_scores, df_report, df_check = process_student_workbook(
             scores_content,
-            disciplines_content
+            disciplines_content,
+            curriculum_content,
         )
         
         logger.info("Generating output XLSX")
@@ -198,12 +220,16 @@ async def create_pivot(
             
             # Write RawScores sheet (intermediate normalized data)
             df_raw_scores.to_excel(writer, sheet_name='RawScores', index=True)
-        
+
+            # Where the credits came from and what the operator has to check (B-31)
+            df_check.to_excel(writer, sheet_name=CHECK_SHEET, index=False)
+
         output.seek(0)
         
         # Apply highlighting to problematic cells
         logger.info("Applying cell highlighting")
-        highlighted_bytes = highlight_problematic_cells(output.getvalue())
+        review = set(df_check.loc[df_check['Проверить'] != '', 'Строка сводной'])
+        highlighted_bytes = highlight_problematic_cells(output.getvalue(), review)
         
         # Create new BytesIO with highlighted content
         final_output = io.BytesIO(highlighted_bytes)
