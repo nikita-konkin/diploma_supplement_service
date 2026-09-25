@@ -24,10 +24,17 @@ public final class PyEngineClient implements PivotEngine {
     }
 
     @Override
-    public byte[] processPivot(final Upload scores, final Upload disciplines) throws IOException {
+    public byte[] processPivot(
+        final Upload scores,
+        final Upload disciplines,
+        final Upload curriculum
+    ) throws IOException {
         final Map<String, Upload> files = new LinkedHashMap<>();
         files.put("scores_xlsx", scores);
         files.put("disciplines_xlsx", disciplines);
+        if (curriculum != null) {
+            files.put("curriculum_xlsx", curriculum);
+        }
         return this.post.send(files, Collections.emptyMap());
     }
 }

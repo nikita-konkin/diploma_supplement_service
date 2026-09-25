@@ -81,7 +81,7 @@ public final class UploadFormTest {
         };
         assertThat(
             "An oversized upload was read into memory instead of being refused",
-            new RsPrint(new TkPivot((scores, disciplines) -> new byte[0], 1024).act(huge)).print(),
+            new RsPrint(new TkPivot((scores, disciplines, curriculum) -> new byte[0], 1024).act(huge)).print(),
             containsString("HTTP/1.1 413")
         );
     }
@@ -91,7 +91,7 @@ public final class UploadFormTest {
         assertThat(
             "The user was not told which file is missing",
             new RsPrint(
-                new TkPivot((scores, disciplines) -> new byte[0], 1024)
+                new TkPivot((scores, disciplines, curriculum) -> new byte[0], 1024)
                     .act(UploadFormTest.request())
             ).print(),
             allOf(
@@ -105,7 +105,7 @@ public final class UploadFormTest {
     public void cannotDropResponseAfterReadingUpload() throws Exception {
         final AtomicReference<Integer> status = new AtomicReference<>(0);
         new FtRemote(
-            new TkPivot((scores, disciplines) -> new byte[] {'P', 'K'}, 1024)
+            new TkPivot((scores, disciplines, curriculum) -> new byte[] {'P', 'K'}, 1024)
         ).exec(
             home -> {
                 final Request req = UploadFormTest.request("disciplines_xlsx");
@@ -141,13 +141,36 @@ public final class UploadFormTest {
         ).exec(
             home -> new PyEngineClient(home.toString().replaceAll("/$", "")).processPivot(
                 new Upload("Оценки.xls", UploadFormTest.WORKBOOK),
-                new Upload("План.xlsx", UploadFormTest.WORKBOOK)
+                new Upload("План.xlsx", UploadFormTest.WORKBOOK),
+                null
             )
         );
         assertThat(
             "An .xls workbook was forwarded under an .xlsx name",
             received.get(),
             containsString("filename=\"scores_xlsx.xls\"")
+        );
+    }
+
+    @Test
+    public void cannotDropUploadedCurriculum() throws Exception {
+        final AtomicReference<String> received = new AtomicReference<>("");
+        new FtRemote(
+            req -> {
+                received.set(new RqPrint(new RqLengthAware(req)).print());
+                return new RsText("ok");
+            }
+        ).exec(
+            home -> new PyEngineClient(home.toString().replaceAll("/$", "")).processPivot(
+                new Upload("Оценки.xlsx", UploadFormTest.WORKBOOK),
+                new Upload("Дисциплины.xlsx", UploadFormTest.WORKBOOK),
+                new Upload("План.xlsx", UploadFormTest.WORKBOOK)
+            )
+        );
+        assertThat(
+            "The curriculum was not forwarded to the pivot service",
+            received.get(),
+            containsString("name=\"curriculum_xlsx\"")
         );
     }
 

@@ -21,6 +21,9 @@ const scoresLabel = document.getElementById("scoresLabel");
 const disciplinesLabel = document.getElementById("disciplinesLabel");
 const scoresName = document.getElementById("scoresName");
 const disciplinesName = document.getElementById("disciplinesName");
+const curriculumPlanFile = document.getElementById("curriculumPlanFile");
+const curriculumPlanLabel = document.getElementById("curriculumPlanLabel");
+const curriculumPlanName = document.getElementById("curriculumPlanName");
 
 scoresFile.addEventListener("change", (e) => {
   if (e.target.files.length > 0) {
@@ -33,6 +36,13 @@ disciplinesFile.addEventListener("change", (e) => {
   if (e.target.files.length > 0) {
     disciplinesLabel.classList.add("has-file");
     disciplinesName.textContent = e.target.files[0].name;
+  }
+});
+
+curriculumPlanFile.addEventListener("change", (e) => {
+  if (e.target.files.length > 0) {
+    curriculumPlanLabel.classList.add("has-file");
+    curriculumPlanName.textContent = e.target.files[0].name;
   }
 });
 
@@ -91,6 +101,9 @@ pivotForm.addEventListener("submit", async (e) => {
   const formData = new FormData();
   formData.append("scores_xlsx", scoresFile.files[0]);
   formData.append("disciplines_xlsx", disciplinesFile.files[0]);
+  if (curriculumPlanFile.files[0]) {
+    formData.append("curriculum_xlsx", curriculumPlanFile.files[0]);
+  }
 
   try {
     const response = await fetch("/pivot", {
@@ -115,8 +128,10 @@ pivotForm.addEventListener("submit", async (e) => {
       pivotForm.reset();
       scoresLabel.classList.remove("has-file");
       disciplinesLabel.classList.remove("has-file");
+      curriculumPlanLabel.classList.remove("has-file");
       scoresName.textContent = "Файл не выбран";
       disciplinesName.textContent = "Файл не выбран";
+      curriculumPlanName.textContent = "Файл не выбран";
     }, 2000);
   } catch (error) {
     showStatus("pivotStatus", "error", `✗ Ошибка: ${error.message}`);

@@ -16,7 +16,7 @@ public final class TkPivotTest {
 
     @Test
     public void cannotHidePivotServiceFailure() throws Exception {
-        final PivotEngine engine = (scores, disciplines) -> {
+        final PivotEngine engine = (scores, disciplines, curriculum) -> {
             throw new DownstreamServiceException(422, "Scores sheet is malformed");
         };
         assertThat(

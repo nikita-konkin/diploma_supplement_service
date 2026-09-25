@@ -40,7 +40,8 @@ public final class TkPivot implements Take {
             final UploadForm form = new UploadForm(req, this.limit);
             final byte[] result = this.client.processPivot(
                 form.file("scores_xlsx", "ведомость с оценками"),
-                form.file("disciplines_xlsx", "список дисциплин учебного плана")
+                form.file("disciplines_xlsx", "список дисциплин учебного плана"),
+                form.optional("curriculum_xlsx")
             );
             LOG.info("Pivot request completed with {} response bytes", result.length);
             return new RsWithType(

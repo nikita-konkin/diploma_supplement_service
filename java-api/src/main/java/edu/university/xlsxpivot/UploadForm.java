@@ -85,6 +85,19 @@ public final class UploadForm {
         return upload;
     }
 
+    /**
+     * File the user may leave out; null when not chosen or empty.
+     *
+     * @param name Form field name
+     */
+    public Upload optional(final String name) {
+        final Upload upload = this.files.get(name);
+        if (upload == null || upload.content().length == 0) {
+            return null;
+        }
+        return upload;
+    }
+
     public Map<String, String> params() {
         return Collections.unmodifiableMap(this.params);
     }
