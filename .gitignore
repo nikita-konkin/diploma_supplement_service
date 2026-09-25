@@ -35,3 +35,8 @@ logs/*
 !logs/.gitkeep
 tmp/
 *.swp
+
+# Real student data must never be committed; tests build workbooks in memory
+*.xlsx
+*.xls
+!**/tests/data/*.xlsx
