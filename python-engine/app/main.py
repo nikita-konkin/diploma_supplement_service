@@ -6,16 +6,16 @@ Handles file uploads, processes student scores, and returns consolidated reports
 import io
 import logging
 import time
-from typing import Dict, Any
+from typing import Dict
 from datetime import datetime
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
+from .excel import WorkbookError
 from .parser import process_student_workbook
 from .logging_config import configure_logging
 
@@ -29,14 +29,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# No CORS: only the Java gateway calls this service, over the compose network.
 
 
 @app.middleware("http")
@@ -150,8 +143,8 @@ async def health() -> Dict[str, str]:
 
 @app.post("/pivot")
 async def create_pivot(
-    scores_xlsx: UploadFile = File(..., description="Student scores workbook (XLSX)"),
-    disciplines_xlsx: UploadFile = File(..., description="Discipline list workbook (XLSX)")
+    scores_xlsx: UploadFile = File(..., description="Student scores workbook (XLSX or XLS)"),
+    disciplines_xlsx: UploadFile = File(..., description="Discipline list workbook (XLSX or XLS)")
 ) -> StreamingResponse:
     """
     Process student scores and create a consolidated pivot report.
@@ -167,20 +160,7 @@ async def create_pivot(
         HTTPException: If file validation or processing fails
     """
     logger.info("Received pivot request")
-    
-    # Validate file types
-    if not scores_xlsx.filename.endswith('.xlsx'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="scores_xlsx must be an Excel file (.xlsx)"
-        )
-    
-    if not disciplines_xlsx.filename.endswith('.xlsx'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="disciplines_xlsx must be an Excel file (.xlsx)"
-        )
-    
+
     try:
         # Read uploaded files into memory
         logger.info(f"Reading scores file: {scores_xlsx.filename}")
@@ -189,23 +169,18 @@ async def create_pivot(
         logger.info(f"Reading disciplines file: {disciplines_xlsx.filename}")
         disciplines_content = await disciplines_xlsx.read()
         
-        # Validate file sizes (basic check)
-        if len(scores_content) == 0:
+        if len(scores_content) == 0 or len(disciplines_content) == 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="scores_xlsx file is empty"
+                detail="Загружен пустой файл: выберите ведомость и список дисциплин заново"
             )
-        
-        if len(disciplines_content) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="disciplines_xlsx file is empty"
-            )
-        
-        logger.info("Processing student workbook")
-        logger.info(f"Len of scores_content {len(scores_content)}")
-        logger.info(f"Len of disciplines_content {len(disciplines_content)}")
-        
+
+        logger.info(
+            "Processing workbooks of %d and %d bytes",
+            len(scores_content),
+            len(disciplines_content),
+        )
+
         # Process the workbooks
         df_raw_scores, df_report = process_student_workbook(
             scores_content,
@@ -251,92 +226,33 @@ async def create_pivot(
         logger.warning("Pivot request rejected: %s", error.detail)
         raise
     
+    except WorkbookError as e:
+        # The message may name a sheet, i.e. a student: keep it out of the log
+        logger.warning("Pivot request rejected: unusable input workbook")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
     except pd.errors.EmptyDataError as e:
-        logger.error(f"Empty data error: {str(e)}")
+        logger.warning("Empty workbook: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="One or more Excel files contain no data"
+            detail="В одном из файлов нет данных"
         )
-    
+
     except ValueError as e:
-        logger.error(f"Validation error: {str(e)}")
+        logger.warning("Pivot input problem: %s", e)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Data validation failed: {str(e)}"
+            detail=f"Ошибка в исходных данных: {str(e)}"
         )
-    
+
     except Exception as e:
         logger.exception("Processing error: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process workbooks: {str(e)}"
-        )
-
-
-@app.post("/validate")
-async def validate_files(
-    scores_xlsx: UploadFile = File(..., description="Student scores workbook (XLSX)"),
-    disciplines_xlsx: UploadFile = File(..., description="Discipline list workbook (XLSX)")
-) -> Dict[str, Any]:
-    """
-    Validate uploaded Excel files without processing.
-    
-    Args:
-        scores_xlsx: Excel file with student sheets
-        disciplines_xlsx: Excel file with discipline list
-        
-    Returns:
-        Validation results including sheet counts and basic structure info
-    """
-    logger.info("Received validation request")
-    
-    try:
-        scores_content = await scores_xlsx.read()
-        disciplines_content = await disciplines_xlsx.read()
-        
-        # Read scores workbook
-        scores_excel = pd.ExcelFile(io.BytesIO(scores_content), engine='openpyxl')
-        scores_sheets = scores_excel.sheet_names
-        
-        # Read disciplines workbook
-        disciplines_excel = pd.ExcelFile(io.BytesIO(disciplines_content), engine='openpyxl')
-        disciplines_sheets = disciplines_excel.sheet_names
-        
-        # Basic validation checks
-        validation_result = {
-            "valid": True,
-            "scores_file": {
-                "filename": scores_xlsx.filename,
-                "sheet_count": len(scores_sheets),
-                "sheet_names": scores_sheets,
-                "size_bytes": len(scores_content)
-            },
-            "disciplines_file": {
-                "filename": disciplines_xlsx.filename,
-                "sheet_count": len(disciplines_sheets),
-                "sheet_names": disciplines_sheets,
-                "size_bytes": len(disciplines_content)
-            },
-            "warnings": []
-        }
-        
-        # Add warnings if needed
-        if len(scores_sheets) == 0:
-            validation_result["warnings"].append("Scores workbook has no sheets")
-            validation_result["valid"] = False
-        
-        if len(disciplines_sheets) == 0:
-            validation_result["warnings"].append("Disciplines workbook has no sheets")
-            validation_result["valid"] = False
-        
-        logger.info(f"Validation complete: {validation_result['valid']}")
-        return validation_result
-    
-    except Exception as e:
-        logger.error(f"Validation error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File validation failed: {str(e)}"
+            detail=f"Не удалось построить сводную таблицу: {str(e)}"
         )
 
 

@@ -4,16 +4,21 @@ Handles data extraction, normalization, and discipline matching.
 """
 
 import re
-import io
-import zipfile
 import pandas as pd
 import numpy as np
 from typing import Optional, Tuple
 import logging
 
-import xml.etree.ElementTree as ET
+from .excel import WorkbookError, open_workbook
 
 logger = logging.getLogger(__name__)
+
+# Layout of a statement sheet exported from «Деканат» (0-based, pandas rows
+# start after the first sheet row): the student name is the header of column E,
+# column titles are on sheet row 7.
+STUDENT_NAME_COLUMN = 4
+TITLES_ROW = 5
+REQUIRED_TITLES = ('наименование предмета', 'часы учр')
 
 
 def clean_text(text) -> str:
@@ -165,7 +170,6 @@ def match_row(orig_name: str, row_name: str) -> Optional[str]:
         
         base = row_base.split('(')[0].strip()
         if 'лективн' in orig_name and base in orig_name:
-            print('Checking elective match for:', row_base)
             return 'elective'
         if base in orig_name:
             return True
@@ -193,82 +197,6 @@ def match_row(orig_name: str, row_name: str) -> Optional[str]:
     
     return False
 
-def debug_excel_file(bytes_data):
-    # Check file signature
-    print(f"File size: {len(bytes_data)} bytes")
-    print(f"First 100 bytes: {bytes_data[:100]}")
-    
-    # Check if it starts with Excel signature
-    excel_signatures = [
-        b'PK\x03\x04',  # ZIP/Excel signature
-        b'\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1'  # OLE/old Excel
-    ]
-    
-    if bytes_data.startswith(b'PK'):
-        print("File appears to be a valid ZIP/Excel file")
-    else:
-        print("File does not appear to be a valid Excel file")
-    
-    # Try to list ZIP contents
-    
-    try:
-        with zipfile.ZipFile(io.BytesIO(bytes_data)) as zf:
-            print(f"ZIP contents: {zf.namelist()}")
-            if 'xl/sharedStrings.xml' in zf.namelist():
-                print("sharedStrings.xml found - good sign")
-            else:
-                print("WARNING: sharedStrings.xml not found in ZIP")
-    except Exception as e:
-        print(f"Not a valid ZIP file: {e}")
-
-def repair_excel_file(bytes_data):
-    """Attempt to repair corrupted Excel file"""
-    try:
-        # Read the ZIP file
-        with zipfile.ZipFile(io.BytesIO(bytes_data)) as zf:
-            # Extract sharedStrings.xml if it exists
-            if 'xl/sharedStrings.xml' in zf.namelist():
-                shared_strings = zf.read('xl/sharedStrings.xml')
-                
-                # Try to parse and repair XML
-                try:
-                    # Parse XML
-                    root = ET.fromstring(shared_strings)
-                    print("sharedStrings.xml is valid XML")
-                except ET.ParseError as e:
-                    print(f"XML parsing error: {e}")
-                    
-                    # Try to fix common XML issues
-                    # Remove null bytes
-                    shared_strings = shared_strings.replace(b'\x00', b'')
-                    # Remove invalid characters
-                    shared_strings = shared_strings.decode('utf-8', errors='ignore').encode('utf-8')
-                    
-                    try:
-                        root = ET.fromstring(shared_strings)
-                        print("XML repaired successfully")
-                    except:
-                        print("Could not repair XML")
-                        
-                        # Create minimal sharedStrings.xml
-                        shared_strings = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="0" uniqueCount="0"></sst>'''
-            
-            # Recreate ZIP with repaired files
-            output = io.BytesIO()
-            with zipfile.ZipFile(output, 'w') as new_zip:
-                for name in zf.namelist():
-                    if name == 'xl/sharedStrings.xml':
-                        new_zip.writestr(name, shared_strings)
-                    else:
-                        new_zip.writestr(name, zf.read(name))
-            
-            return output.getvalue()
-            
-    except zipfile.BadZipFile:
-        print("File is not a valid ZIP archive")
-        return None
-
 def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> pd.DataFrame:
     """
     Matches and fills discipline ratings from df_stud_scores into a new DataFrame
@@ -281,36 +209,21 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
     Returns:
         DataFrame with matched disciplines and student scores
     """
-    logger.info(f"discipline_bytes len = {len(discipline_bytes)}")
-    debug_excel_file(discipline_bytes)
-    repaired_bytes = repair_excel_file(discipline_bytes)
-    if repaired_bytes:
-        df = pd.read_excel(io.BytesIO(repaired_bytes), engine='openpyxl')
-    # logger.info(f"df = {df}")
-    # Read discipline names from Excel
-    df_origin_names = pd.read_excel(
-        io.BytesIO(discipline_bytes), 
-        header=0, 
-        # skiprows=1,
-        engine='openpyxl'
-    )
-    logger.info(df_origin_names)
-    # logger.info(df_origin_names.columns)
+    df_origin_names = open_workbook(discipline_bytes, "Список дисциплин").parse(0, header=0)
     clean_cols = [re.sub(r'\s+', '', str(col).lower()) for col in df_origin_names.columns]
 
     target = 'обязательнаячасть'
     matches = [i for i, col in enumerate(clean_cols) if target in col]
-
-    if matches:
-        col_idx = matches[0]
-        df_origin_names = df_origin_names.iloc[:, col_idx].drop(df_origin_names.index[0])
-        logger.info("Column 'обязательнаячасть' is finded =)")
-    else:
-        result = None
-        logger.info("No column with name 'обязательнаячасть'")
+    if not matches:
+        raise WorkbookError(
+            'Список дисциплин: в первой строке первого листа нет колонки '
+            '«Обязательная часть». Под этим заголовком должны идти названия '
+            'дисциплин из учебного плана.'
+        )
+    df_origin_names = df_origin_names.iloc[:, matches[0]].drop(df_origin_names.index[0])
+    logger.info("Discipline list has %d rows", len(df_origin_names))
 
     df_result = pd.DataFrame(index=df_origin_names, columns=df_stud_scores.columns)
-    print('------', df_result)
     prefix_base = ''
     count_of_prefix = 0
     old_index = ''
@@ -331,7 +244,7 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
         for row_index, row in df_stud_scores.iterrows():
             if isinstance(orig_index, str) and isinstance(row_index, str):
                 match = match_row(orig_index, row_index)
-                logger.info(f"Matching '{orig_index}' with '{row_index}': {match}")
+                logger.debug(f"Matching '{orig_index}' with '{row_index}': {match}")
                 if match is True:
                     if in_group:
                         # Keep the type and credits suffix of the matched row
@@ -347,7 +260,6 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
                         break
                         
                 elif match == 'elective':
-                    print('Matched elective:', row_index) 
                     logger.info(f"Matched elective: {row_index}")
                     df_result = df_result.rename(index={orig_index: row_index})
                     df_result.loc[row_index] = row
@@ -356,8 +268,6 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
                     break
 
                 elif match == 'facultative':
-                    logger.info(f"Matched facultative: {row_index}")
-                    print('Matched facultative:', row_index) 
                     logger.info(f"Matched facultative: {row_index}")
                     new_index = row_index.replace('дисциплина', 'факультатив')
                     df_result = df_result.rename(index={orig_index: new_index})
@@ -368,7 +278,6 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
 
                 elif match == 'kurs':
                     logger.info(f"Matched course work: {row_index}")
-                    print(f"Matched course work: {row_index}")
                     df_result.loc[row_index] = row
 
         if in_group:
@@ -395,6 +304,36 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
     
     return df_result
 
+def statement_layout(name: str, df: pd.DataFrame) -> Tuple[str, list]:
+    """
+    Check that a statement sheet has the «Деканат» layout.
+
+    Returns:
+        Student name and cleaned column titles
+
+    Raises:
+        WorkbookError: naming the sheet and what is missing
+    """
+    where = f'Ведомость, лист «{name}»'
+    if df.shape[1] <= STUDENT_NAME_COLUMN or len(df) <= TITLES_ROW:
+        raise WorkbookError(
+            f'{where}: лист не похож на ведомость «Деканата» '
+            '(ожидается ФИО студента в ячейке E1 и заголовки колонок в строке 7)'
+        )
+    stud_name = df.columns[STUDENT_NAME_COLUMN]
+    if not isinstance(stud_name, str) or stud_name.startswith('Unnamed'):
+        raise WorkbookError(f'{where}: в ячейке E1 нет ФИО студента')
+    titles = [clean_text(val) for val in df.iloc[TITLES_ROW, :]]
+    missing = [t for t in REQUIRED_TITLES if t not in titles]
+    if missing:
+        raise WorkbookError(
+            f'{where}: в строке 7 нет колонок '
+            + ', '.join(f'«{t}»' for t in missing)
+            + '. Ожидается ведомость «Деканата» в обычном макете.'
+        )
+    return stud_name, titles
+
+
 def process_student_workbook(
     scores_bytes: bytes,
     disciplines_bytes: bytes
@@ -411,8 +350,7 @@ def process_student_workbook(
     """
     logger.info("Starting student workbook processing")
     
-    # Load the Excel file
-    excel_file = pd.ExcelFile(io.BytesIO(scores_bytes), engine='openpyxl')
+    excel_file = open_workbook(scores_bytes, "Ведомость")
     sheet_names = excel_file.sheet_names
     
     logger.info(f"Found {len(sheet_names)} student sheets")
@@ -425,15 +363,10 @@ def process_student_workbook(
     
     # Process each student sheet
     for name, df in sheets.items():
-        logger.info(f"Processing sheet: {name}")
-        
-        # Extract student name from column 4
-        stud_name = df.columns[4]
-        logger.info(f"Student name: {stud_name}")
-        
-        # Clean column names from row 5 (0-indexed)
-        new_columns = [clean_text(val) for val in df.iloc[5, :]]
-        df = df.iloc[6:]  # Skip header rows
+        # The sheet name and the student name are personal data: log the position only
+        logger.info("Processing statement sheet %d", list(sheets).index(name) + 1)
+        stud_name, new_columns = statement_layout(name, df)
+        df = df.iloc[TITLES_ROW + 1:]  # Skip header rows
         df.columns = new_columns
         
         # Drop columns and rows with unwanted data
@@ -444,9 +377,16 @@ def process_student_workbook(
             'ПГТУ -', 'Всего', '┌ наименование предмета'
         ])]
         df = df[df['часы учр'].notna()]
-        
+        hours = pd.to_numeric(df['часы учр'], errors='coerce')
+        if hours.isna().any():
+            subject = df.loc[hours.isna(), 'наименование предмета'].iloc[0]
+            raise WorkbookError(
+                f'Ведомость, лист «{name}»: у «{subject}» в колонке «часы уч.р.» '
+                f'не число — «{df.loc[hours.isna(), "часы учр"].iloc[0]}»'
+            )
+
         # Convert credits (hours to units)
-        df['часы учр'] = (df['часы учр'].astype(int) / 36).astype(int)
+        df['часы учр'] = (hours.astype(int) / 36).astype(int)
         df.rename(columns={"часы учр": "зач ед"}, inplace=True)
         
         # Convert зачет 'V' to 6

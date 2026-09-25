@@ -5,8 +5,7 @@ services:
           context: ./python-engine
           dockerfile: Dockerfile
       container_name: diploma-python-engine
-      ports:
-          - "8000:8000"  # Expose for debugging (optional)
+      # Reachable only from the gateway over the compose network (B-10).
       expose:
           - 8000
       environment:
@@ -34,8 +33,7 @@ services:
           context: ./python-xml-engine
           dockerfile: Dockerfile
       container_name: diploma-python-xml-engine
-      ports:
-          - "8001:8001"  # Expose for debugging (optional)
+      # Reachable only from the gateway over the compose network (B-10).
       expose:
           - 8001
       environment:

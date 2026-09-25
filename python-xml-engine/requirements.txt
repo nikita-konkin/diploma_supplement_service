@@ -10,3 +10,6 @@ numpy==1.26.3
 
 # Additional utilities
 python-dateutil==2.8.2
+
+# Old .xls workbooks (B-24)
+xlrd==2.0.1

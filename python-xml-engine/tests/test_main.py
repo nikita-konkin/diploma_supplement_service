@@ -31,13 +31,13 @@ def test_cannot_hide_missing_disciplines_column():
             "state_exam_credits": "6",
         },
     )
-    assert (response.status_code, response.json()["detail"]) == (
-        500,
-        'Failed to generate XML: "None of [\'Дисциплины\'] are in the columns"',
-    ), "XML service concealed the missing Дисциплины column"
+    assert (
+        response.status_code,
+        "нет колонки «Дисциплины»" in response.json()["detail"],
+    ) == (400, True), "XML service concealed the missing Дисциплины column"
 
 
-def test_cannot_accept_wrong_file_extensions():
+def test_cannot_accept_text_file_as_workbook():
     response = TestClient(app).post(
         "/generate-xml",
         files={
@@ -57,9 +57,9 @@ def test_cannot_accept_wrong_file_extensions():
             "gek_chairman": "Председатель",
         },
     )
-    assert response.json() == {
-        "detail": "pivot_table must be an Excel file (.xlsx)"
-    }, "XML service failed to reject a disguised CSV file"
+    assert response.json()["detail"].startswith(
+        "Сводная таблица: файл не является книгой Excel"
+    ), "XML service failed to reject a disguised CSV file"
 
 
 def test_cannot_accept_obsolete_speciality_field():

@@ -3,7 +3,6 @@ FastAPI application for XML Diploma Generation Service.
 Converts pivot tables to CyberDiploma XML format.
 """
 
-import io
 import logging
 import time
 from typing import Optional
@@ -11,9 +10,8 @@ from datetime import datetime
 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, status, Form
 from fastapi.responses import Response
-from fastapi.middleware.cors import CORSMiddleware
-import pandas as pd
 
+from .excel import WorkbookError, open_workbook
 from .xml_generator import DataValidationError, DiplomaXMLGenerator
 from .logging_config import configure_logging
 from urllib.parse import quote
@@ -29,14 +27,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# No CORS: only the Java gateway calls this service, over the compose network.
 
 
 @app.middleware("http")
@@ -119,34 +110,22 @@ async def generate_xml(
                 )
             )
 
-        # Validate file types
-        for file, name in [(pivot_table, "pivot_table"), (student_info, "student_info")]:
-            if not file.filename.endswith('.xlsx'):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"{name} must be an Excel file (.xlsx)"
-                )
-        
-        # Read files
-        logger.info(f"Reading pivot table: {pivot_table.filename}")
-        pivot_bytes = await pivot_table.read()
-        
-        logger.info(f"Reading student info: {student_info.filename}")
-        student_bytes = await student_info.read()
-        
-        # Parse pivot table
-        df_disciplines = pd.read_excel(
-            io.BytesIO(pivot_bytes),
-            header=0,
-            engine='openpyxl'
-        )
+        # Both .xlsx and old .xls workbooks are accepted, by content
+        df_disciplines = open_workbook(
+            await pivot_table.read(), "Сводная таблица"
+        ).parse(0, header=0)
         df_disciplines.dropna(inplace=True, axis=0, how='all')
-        
-        # Parse student info
-        df_students = pd.read_excel(
-            io.BytesIO(student_bytes),
-            engine='openpyxl'
-        )
+        if 'Дисциплины' not in df_disciplines.columns:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Сводная таблица: на первом листе нет колонки «Дисциплины». "
+                    "Загрузите сводную, построенную на вкладке «Сводная таблица»."
+                )
+            )
+        df_students = open_workbook(
+            await student_info.read(), "Сведения о студентах"
+        ).parse(0)
         
         # Create configuration
         config = {
@@ -208,18 +187,25 @@ async def generate_xml(
             detail=str(e)
         )
 
-    except ValueError as e:
-        logger.error(f"Validation error: {str(e)}")
+    except WorkbookError as e:
+        logger.warning("XML request rejected: unusable input workbook")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Validation failed: {str(e)}"
+            detail=str(e)
+        )
+
+    except ValueError as e:
+        logger.warning("XML request rejected: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Ошибка в исходных данных: {str(e)}"
         )
     
     except Exception as e:
         logger.exception("Processing error: %s", str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate XML: {str(e)}"
+            detail=f"Не удалось сформировать XML: {str(e)}"
         )
 
 
