@@ -317,17 +317,27 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
 
     for orig_index in df_result.index:
         matched = False
-        
+        # "Группа * N" in the plan: the next N plan rows belong to the group
+        in_group = bool(prefix_base) and count_of_prefix > 0
+
+        if isinstance(orig_index, str) and '*' in orig_index and not in_group:
+            logger.info(f"Matched prefix pattern: {orig_index}")
+            prefix_base = orig_index.split('*')[0].strip()
+            count_of_prefix = int(orig_index.split('*')[1].strip())
+            old_index = orig_index
+            df_result.loc[orig_index] = ''
+            continue
+
         for row_index, row in df_stud_scores.iterrows():
             if isinstance(orig_index, str) and isinstance(row_index, str):
                 match = match_row(orig_index, row_index)
                 logger.info(f"Matching '{orig_index}' with '{row_index}': {match}")
-                if match is True or count_of_prefix != 0:
-                    if prefix_base and count_of_prefix != 0:
-                        new_index = f"{prefix_base}. {orig_index}"
+                if match is True:
+                    if in_group:
+                        # Keep the type and credits suffix of the matched row
+                        new_index = f"{prefix_base}. {row_index}"
                         df_result = replace_index_occurrence(df_result, orig_index, new_index)
                         df_result.loc[new_index] = row
-                        count_of_prefix -= 1
                         matched = True
                         break
                     else:
@@ -360,14 +370,10 @@ def parse_discipline(df_stud_scores: pd.DataFrame, discipline_bytes: bytes) -> p
                     logger.info(f"Matched course work: {row_index}")
                     print(f"Matched course work: {row_index}")
                     df_result.loc[row_index] = row
-                    
-                elif match == 'prefix':
-                    logger.info(f"Matched prefix pattern: {orig_index}")
-                    prefix_base = orig_index.split('*')[0].strip()
-                    count_of_prefix = int(orig_index.split('*')[1].strip())
-                    old_index = orig_index
-                    break
-        
+
+        if in_group:
+            count_of_prefix -= 1
+
         # Clean up prefix handling
         if prefix_base and count_of_prefix == 0:
             df_result = remove_index_occurrence(df_result, old_index)
