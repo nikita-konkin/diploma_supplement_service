@@ -223,23 +223,49 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="speciality">Код и название специальности</label>
+                            <label for="direction"
+                                >Направление подготовки: код и наименование
+                                (из шапки учебного плана)</label
+                            >
                             <input
                                 type="text"
-                                id="speciality"
-                                name="speciality"
-                                list="specialityList"
+                                id="direction"
+                                name="direction"
+                                list="directionList"
+                                placeholder="09.03.02 ИНФОРМАЦИОННЫЕ СИСТЕМЫ И ТЕХНОЛОГИИ"
                                 required
                             />
-                            <datalist id="specialityList">
+                            <datalist id="directionList">
                                 <option
-                                    value="09.03.02 Интеллектуальные информационные системы и технологии"
+                                    value="09.03.02 ИНФОРМАЦИОННЫЕ СИСТЕМЫ И ТЕХНОЛОГИИ"
                                 ></option>
                                 <option
-                                    value="11.03.02 Интеллектуальные телекоммуникационные системы и сети"
+                                    value="11.03.02 ИНФОКОММУНИКАЦИОННЫЕ ТЕХНОЛОГИИ И СИСТЕМЫ СВЯЗИ"
                                 ></option>
                                 <option
-                                    value="11.04.02 Интеллектуальные телекоммуникационные системы и сети"
+                                    value="11.04.02 ИНФОКОММУНИКАЦИОННЫЕ ТЕХНОЛОГИИ И СИСТЕМЫ СВЯЗИ"
+                                ></option>
+                            </datalist>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="profile"
+                                >Профиль (направленность), без кода</label
+                            >
+                            <input
+                                type="text"
+                                id="profile"
+                                name="profile"
+                                list="profileList"
+                                placeholder="Интеллектуальные информационные системы и технологии"
+                                required
+                            />
+                            <datalist id="profileList">
+                                <option
+                                    value="Интеллектуальные информационные системы и технологии"
+                                ></option>
+                                <option
+                                    value="Интеллектуальные телекоммуникационные системы и сети"
                                 ></option>
                             </datalist>
                         </div>

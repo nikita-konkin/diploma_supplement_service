@@ -14,7 +14,7 @@ from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 
-from .xml_generator import DiplomaXMLGenerator
+from .xml_generator import DataValidationError, DiplomaXMLGenerator
 from .logging_config import configure_logging
 from urllib.parse import quote
 import re
@@ -84,7 +84,9 @@ async def generate_xml(
     edu_term: str = Form(..., description="Education term (e.g., '4 года')"),
     qualification: str = Form(..., description="Qualification (e.g., 'бакалавр')"),
     edu_form: str = Form(..., description="Education form (e.g., 'очная')"),
-    speciality: str = Form(..., description="Speciality code and name"),
+    direction: Optional[str] = Form(None, description="Direction code and name, e.g. '09.03.02 ИНФОРМАЦИОННЫЕ СИСТЕМЫ И ТЕХНОЛОГИИ'"),
+    profile: Optional[str] = Form(None, description="Program profile (направленность)"),
+    speciality: Optional[str] = Form(None, description="Obsolete: replaced by direction and profile"),
     edu_progr_vol: int = Form(..., description="Program volume in credits"),
     edu_progr_vol_contact: str = Form(..., description="Contact hours (e.g., '3180 ак.час')"),
     pract_total_z_e: int = Form(..., description="Total practice credits"),
@@ -107,6 +109,16 @@ async def generate_xml(
     logger.info("Received XML generation request")
     
     try:
+        if direction is None and speciality is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Форма устарела: вместо «Код и название специальности» нужно "
+                    "указать направление подготовки и профиль. Обновите страницу "
+                    "(Ctrl+F5) и заполните оба поля."
+                )
+            )
+
         # Validate file types
         for file, name in [(pivot_table, "pivot_table"), (student_info, "student_info")]:
             if not file.filename.endswith('.xlsx'):
@@ -141,7 +153,8 @@ async def generate_xml(
             'edu_term': edu_term,
             'qualification': qualification,
             'edu_form': edu_form,
-            'speciality': speciality,
+            'direction': direction,
+            'profile': profile,
             'edu_progr_vol': edu_progr_vol,
             'edu_progr_vol_contact': edu_progr_vol_contact,
             'pract_total_z_e': pract_total_z_e,
@@ -161,7 +174,7 @@ async def generate_xml(
         xml_content = generator.generate_xml(df_disciplines, df_students)
         
         # Generate filename
-        spec_code = speciality.split(' ')[0]
+        spec_code = generator.direction_code
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{spec_code}_{qualification}_{edu_form}_{timestamp}.xml"
         
@@ -188,6 +201,13 @@ async def generate_xml(
         logger.warning("XML request rejected: %s", error.detail)
         raise
     
+    except DataValidationError as e:
+        logger.warning("XML request has %d data problems", len(e.problems))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
     except ValueError as e:
         logger.error(f"Validation error: {str(e)}")
         raise HTTPException(

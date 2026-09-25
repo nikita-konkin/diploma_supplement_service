@@ -21,7 +21,8 @@ def test_cannot_hide_missing_disciplines_column():
             "edu_term": "4 года",
             "qualification": "бакалавр",
             "edu_form": "очная",
-            "speciality": "09.03.01 Информатика",
+            "direction": "09.03.02 ИНФОРМАЦИОННЫЕ СИСТЕМЫ И ТЕХНОЛОГИИ",
+            "profile": "Интеллектуальные информационные системы и технологии",
             "edu_progr_vol": "240",
             "edu_progr_vol_contact": "3180 ак.час",
             "pract_total_z_e": "12",
@@ -47,7 +48,8 @@ def test_cannot_accept_wrong_file_extensions():
             "edu_term": "4 года",
             "qualification": "бакалавр",
             "edu_form": "очная",
-            "speciality": "09.03.01 Информатика",
+            "direction": "09.03.02 ИНФОРМАЦИОННЫЕ СИСТЕМЫ И ТЕХНОЛОГИИ",
+            "profile": "Интеллектуальные информационные системы и технологии",
             "edu_progr_vol": "240",
             "edu_progr_vol_contact": "3180 ак.час",
             "pract_total_z_e": "12",
@@ -58,3 +60,27 @@ def test_cannot_accept_wrong_file_extensions():
     assert response.json() == {
         "detail": "pivot_table must be an Excel file (.xlsx)"
     }, "XML service failed to reject a disguised CSV file"
+
+
+def test_cannot_accept_obsolete_speciality_field():
+    response = TestClient(app).post(
+        "/generate-xml",
+        files={
+            "pivot_table": ("pivot.xlsx", b"bad", "application/octet-stream"),
+            "student_info": ("students.xlsx", b"bad", "application/octet-stream"),
+        },
+        data={
+            "edu_term": "4 года",
+            "qualification": "бакалавр",
+            "edu_form": "очная",
+            "speciality": "09.03.02 Интеллектуальные информационные системы и технологии",
+            "edu_progr_vol": "240",
+            "edu_progr_vol_contact": "3180 ак.час",
+            "pract_total_z_e": "12",
+            "gia_z_e": "9",
+            "gek_chairman": "Председатель",
+        },
+    )
+    assert response.json()["detail"].startswith("Форма устарела"), (
+        "A stale page sent the profile as the direction and it was accepted"
+    )

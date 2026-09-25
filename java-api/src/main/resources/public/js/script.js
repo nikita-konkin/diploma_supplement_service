@@ -179,7 +179,8 @@ xmlForm.addEventListener("submit", async (e) => {
     document.getElementById("qualification").value,
   );
   formData.append("edu_form", document.getElementById("eduForm").value);
-  formData.append("speciality", document.getElementById("speciality").value);
+  formData.append("direction", document.getElementById("direction").value);
+  formData.append("profile", document.getElementById("profile").value);
   formData.append(
     "edu_progr_vol",
     document.getElementById("eduProgrVol").value,
@@ -213,16 +214,16 @@ xmlForm.addEventListener("submit", async (e) => {
 
     const blob = await response.blob();
     
-    // ===== MODIFIED: Get speciality value for filename =====
-    const speciality = document.getElementById("speciality").value;
-    
+    // ===== MODIFIED: Get direction value for filename =====
+    const direction = document.getElementById("direction").value;
+
     // Create a safe filename by removing special characters
-    const safeSpeciality = speciality
+    const safeSpeciality = direction
       .replace(/[^a-zA-Zа-яА-ЯёЁ0-9\s]/g, '') // Remove special chars, keep Cyrillic
       .replace(/\s+/g, '_') // Replace spaces with underscores
       .substring(0, 50); // Limit length to 50 chars
     
-    // Use speciality in filename if available
+    // Use the direction in filename if available
     const filename = safeSpeciality 
       ? `${safeSpeciality}_${Date.now()}.xml`
       : `diploma_${Date.now()}.xml`;

@@ -202,6 +202,8 @@ select:focus {
     background: #f8d7da;
     color: #721c24;
     border: 1px solid #f5c6cb;
+    white-space: pre-line;
+    text-align: left;
 }
 
 .status.loading {
