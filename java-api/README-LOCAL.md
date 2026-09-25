@@ -53,8 +53,8 @@ The runner scripts use environment variables for configuration. You can customiz
 | `API_PORT` | `8080` | Port where the Java API will listen |
 | `PIVOT_ENGINE_BASE_URL` | `http://localhost:8000` | URL of the Python Pivot Engine service |
 | `XML_API_BASE_URL` | `http://localhost:8001` | URL of the Python XML Engine service |
-| `PIVOT_API_PATH` | `/pivot` | Path for the pivot API endpoint |
 | `XML_GENERATE_PATH` | `/generate-xml` | Path for the XML generation endpoint |
+| `MAX_UPLOAD_MB` | `20` | Largest accepted upload request; bigger ones get HTTP 413 |
 | `JAVA_OPTS` | `-Xmx512m -Xms256m` | JVM options for memory settings |
 
 ### Setting Environment Variables
@@ -135,7 +135,6 @@ Once the server is running, you can access:
 - **Health Check**: http://localhost:8080/health
 - **Pivot API**: http://localhost:8080/pivot (POST)
 - **XML Generation**: http://localhost:8080/generate-xml (POST)
-- **Config Endpoint**: http://localhost:8080/config
 
 ## Testing the API
 

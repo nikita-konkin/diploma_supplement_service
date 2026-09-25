@@ -59,8 +59,6 @@ public final class App {
                 new FkRegex("/pivot", new TkPivot()),
                 // XML generation proxy (forwards to python xml-engine)
                 new FkRegex("/generate-xml", new TkGenerateXml()),
-                // Runtime config for frontend
-                new FkRegex("/config", new TkConfig()),
                 // Health check endpoint
                 new FkRegex("/health", new TkHealth())
             ),

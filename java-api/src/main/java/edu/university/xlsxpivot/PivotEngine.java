@@ -8,5 +8,5 @@ import java.io.IOException;
 @FunctionalInterface
 public interface PivotEngine {
 
-    byte[] processPivot(byte[] scores, byte[] disciplines) throws IOException;
+    byte[] processPivot(Upload scores, Upload disciplines) throws IOException;
 }

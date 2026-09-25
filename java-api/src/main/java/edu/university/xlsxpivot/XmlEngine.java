@@ -8,6 +8,6 @@ import java.util.Map;
 @FunctionalInterface
 public interface XmlEngine {
 
-    byte[] generate(Map<String, byte[]> files, Map<String, String> params)
+    byte[] generate(Map<String, Upload> files, Map<String, String> params)
         throws Exception;
 }

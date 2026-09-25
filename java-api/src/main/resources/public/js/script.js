@@ -1,14 +1,3 @@
-// Load runtime config from server into `window.APP_CONFIG`
-window.APP_CONFIG = {};
-window.APP_CONFIG_READY = (async function loadAppConfig() {
-  try {
-    const resp = await fetch("/config");
-    if (resp.ok) window.APP_CONFIG = await resp.json();
-  } catch (e) {
-    /* ignore, fall back to defaults */
-  }
-})();
-
 // Tab switching
 function switchTab(index) {
   const tabs = document.querySelectorAll(".tab");
@@ -87,11 +76,8 @@ const pivotSubmitBtn = document.getElementById("pivotSubmitBtn");
 pivotForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  // Wait for config to load before proceeding
-  await window.APP_CONFIG_READY;
-
   if (!scoresFile.files[0] || !disciplinesFile.files[0]) {
-    showStatus("pivotStatus", "error", "Please select both files");
+    showStatus("pivotStatus", "error", "Выберите оба файла: ведомость и список дисциплин");
     return;
   }
 
@@ -99,7 +85,7 @@ pivotForm.addEventListener("submit", async (e) => {
   showStatus(
     "pivotStatus",
     "loading",
-    '<span class="spinner"></span>Processing files, please wait...',
+    '<span class="spinner"></span>Обработка файлов, пожалуйста, подождите...',
   );
 
   const formData = new FormData();
@@ -107,19 +93,13 @@ pivotForm.addEventListener("submit", async (e) => {
   formData.append("disciplines_xlsx", disciplinesFile.files[0]);
 
   try {
-    // Use configured pivot service URL from runtime config
-    // const apiBase = (window.APP_CONFIG && window.APP_CONFIG.PIVOT_ENGINE_BASE_URL) ? window.APP_CONFIG.PIVOT_ENGINE_BASE_URL : '';
-    // const pivotPath = (window.APP_CONFIG && window.APP_CONFIG.PIVOT_API_PATH) ? window.APP_CONFIG.PIVOT_API_PATH : '/pivot';
-    // const pivotUrl = apiBase ? (apiBase.replace(/\/$/, '') + pivotPath) : '/pivot';
-    const pivotUrl = "/pivot";
-
-    const response = await fetch(pivotUrl, {
+    const response = await fetch("/pivot", {
       method: "POST",
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error(await responseError(response, "Processing failed"));
+      throw new Error(await responseError(response, "Не удалось построить сводную таблицу"));
     }
 
     const blob = await response.blob();
@@ -139,7 +119,7 @@ pivotForm.addEventListener("submit", async (e) => {
       disciplinesName.textContent = "Файл не выбран";
     }, 2000);
   } catch (error) {
-    showStatus("pivotStatus", "error", `✗ Error: ${error.message}`);
+    showStatus("pivotStatus", "error", `✗ Ошибка: ${error.message}`);
   } finally {
     pivotSubmitBtn.disabled = false;
   }
@@ -153,11 +133,8 @@ const xmlSubmitBtn = document.getElementById("xmlSubmitBtn");
 xmlForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  // Wait for config to load before proceeding
-  await window.APP_CONFIG_READY;
-
   if (!pivotTableFile.files[0] || !studentInfoFile.files[0]) {
-    showStatus("xmlStatus", "error", "Please select required files");
+    showStatus("xmlStatus", "error", "Выберите оба файла: сводную таблицу и сведения о студентах");
     return;
   }
 
@@ -201,20 +178,17 @@ xmlForm.addEventListener("submit", async (e) => {
   );
 
   try {
-    const xmlUrl = "/generate-xml";
-
-    const response = await fetch(xmlUrl, {
+    const response = await fetch("/generate-xml", {
       method: "POST",
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error(await responseError(response, "XML generation failed"));
+      throw new Error(await responseError(response, "Не удалось сформировать XML"));
     }
 
     const blob = await response.blob();
-    
-    // ===== MODIFIED: Get direction value for filename =====
+
     const direction = document.getElementById("direction").value;
 
     // Create a safe filename by removing special characters
@@ -229,7 +203,6 @@ xmlForm.addEventListener("submit", async (e) => {
       : `diploma_${Date.now()}.xml`;
     
     downloadFile(blob, filename);
-    // ===== END MODIFICATION =====
 
     showStatus(
       "xmlStatus",
@@ -261,6 +234,15 @@ function showStatus(elementId, type, message) {
 }
 
 async function responseError(response, fallback) {
+  if (response.status === 413) {
+    // A proxy in front of the gateway may answer with its own HTML page
+    const body = await response.text();
+    try {
+      return JSON.parse(body).error || "Файлы слишком большие для загрузки";
+    } catch (error) {
+      return "Файлы слишком большие для загрузки";
+    }
+  }
   const body = await response.text();
   if (!body) {
     return fallback;

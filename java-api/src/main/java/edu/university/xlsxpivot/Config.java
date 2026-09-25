@@ -21,13 +21,15 @@ public final class Config {
         }
     }
 
-    public static String apiBase() {
-        return get("PIVOT_ENGINE_BASE_URL", "xn----etb9agicel");
-        // return "xn----etb9agicel.xn--p1ai";
-    }
-
     public static int apiPort() {
         return getInt("API_PORT", 8080);
+    }
+
+    public static String pivotEngineBase() {
+        return get(
+            "PYTHON_ENGINE_URL",
+            get("PIVOT_ENGINE_BASE_URL", "http://python-engine:8000")
+        );
     }
 
     public static String xmlApiBase() {
@@ -41,12 +43,10 @@ public final class Config {
         return get("XML_GENERATE_PATH", "/generate-xml");
     }
 
-    public static String pivotEngineBase() {
-        return get("PIVOT_ENGINE_BASE_URL", "xn----etb9agicel");
-        // return "xn----etb9agicel.xn--p1ai";
-    }
-
-    public static String apiPivotPath() {
-        return get("PIVOT_API_PATH", "/pivot");
+    /**
+     * Largest accepted upload request, bytes (MAX_UPLOAD_MB, 20 by default).
+     */
+    public static long maxUploadBytes() {
+        return getInt("MAX_UPLOAD_MB", 20) * 1048576L;
     }
 }
