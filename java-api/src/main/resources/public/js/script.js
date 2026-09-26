@@ -49,13 +49,10 @@ curriculumPlanFile.addEventListener("change", (e) => {
 // File input handlers - XML Service
 const pivotTableFile = document.getElementById("pivotTableFile");
 const studentInfoFile = document.getElementById("studentInfoFile");
-// const curriculumFile = document.getElementById("curriculumFile");
 const pivotTableLabel = document.getElementById("pivotTableLabel");
 const studentInfoLabel = document.getElementById("studentInfoLabel");
-const curriculumLabel = document.getElementById("curriculumLabel");
 const pivotTableName = document.getElementById("pivotTableName");
 const studentInfoName = document.getElementById("studentInfoName");
-const curriculumName = document.getElementById("curriculumName");
 
 pivotTableFile.addEventListener("change", (e) => {
   if (e.target.files.length > 0) {
@@ -70,13 +67,6 @@ studentInfoFile.addEventListener("change", (e) => {
     studentInfoName.textContent = e.target.files[0].name;
   }
 });
-
-// curriculumFile.addEventListener("change", (e) => {
-//   if (e.target.files.length > 0) {
-//     curriculumLabel.classList.add("has-file");
-//     curriculumName.textContent = e.target.files[0].name;
-//   }
-// });
 
 // Pivot form submission
 const pivotForm = document.getElementById("pivotForm");

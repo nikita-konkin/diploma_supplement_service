@@ -11,6 +11,20 @@ On Windows PowerShell:
 The script creates isolated Python virtual environments when needed, runs both
 Pytest suites, runs the Maven/JUnit suite, and validates `docker-compose.yml`.
 
+Without local Python or Maven, Docker is enough: every image runs its tests
+while it is built, and a failing test stops the build.
+
+```sh
+docker compose build
+```
+
+To run only the gateway tests:
+
+```sh
+cd java-api
+docker run --rm -v "$PWD":/build -w /build maven:3.9-eclipse-temurin-17 mvn -q -B test
+```
+
 The tests follow the practical Angry Tests rules used in this project:
 
 - one final assertion per test;
