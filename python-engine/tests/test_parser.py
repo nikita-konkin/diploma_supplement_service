@@ -1,7 +1,7 @@
 import pandas as pd
 
 from app.parser import parse_discipline, process_student_workbook
-from workbooks import curriculum, plan, statement
+from workbooks import curriculum, plan, plans_curriculum, statement
 
 
 def scores() -> pd.DataFrame:
@@ -118,4 +118,34 @@ def test_cannot_lose_grades_when_first_student_has_none():
     )
     assert report.loc["Математика_дисциплина_3", "Борисов Б. Б."] == 4, (
         "A grade was lost because the first student had none yet"
+    )
+
+
+FACULTATIVE = ("Тестов Т. Т.", [
+    ("Математика", 216, None, 5, None),
+    ("Теория игр", 108, "V", None, None),
+    ("Физика", 144, None, 4, None),
+])
+
+
+def test_cannot_print_facultative_of_curriculum_as_discipline():
+    report, _ = pivot_of(FACULTATIVE, names=("Математика", "Теория игр", "Физика"), curriculum_bytes=plans_curriculum(
+        ("Блок 1. Дисциплины (модули)",),
+        ("Б1.О.01", "Математика", 6),
+        ("Факультативные дисциплины",),
+        ("1", "Теория игр", 3),
+        ("Блок 2. Практика",),
+        ("Б2.О.01", "Физика", 4),
+    ))
+    assert list(report.index) == [
+        "Математика_дисциплина_6", "Теория игр_факультатив_3", "Физика_дисциплина_4"
+    ], "A facultative of the curriculum went to the pivot as a discipline, or the section did not end at the block"
+
+
+def test_cannot_miss_facultative_by_its_index():
+    report, _ = pivot_of(FACULTATIVE, names=("Теория игр",), curriculum_bytes=plans_curriculum(
+        ("ФТД.01", "Теория игр", 3),
+    ))
+    assert "Теория игр_факультатив_3" in report.index, (
+        "A discipline with the index «ФТД» did not become a facultative"
     )

@@ -9,7 +9,7 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 import logging
 
-from .curriculum import find_credits, plan_credits
+from .curriculum import Plan, find_key, read_plan
 from .excel import WorkbookError, open_workbook
 
 logger = logging.getLogger(__name__)
@@ -368,7 +368,7 @@ def settle_credits(
     report: pd.DataFrame,
     hours: Dict[str, float],
     ungraded: Dict[str, int],
-    credits: Optional[Dict[str, float]],
+    plan: Optional[Plan],
     plan_problem: str,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -376,7 +376,8 @@ def settle_credits(
 
     Without a readable curriculum, or for a discipline missing from it, the
     credits stay as counted from the statement hours and the row is marked
-    for the operator to check (B-31).
+    for the operator to check (B-31). A discipline the curriculum lists among
+    the facultatives becomes one (B-37).
 
     Returns:
         Pivot with corrected labels, and the check table
@@ -391,7 +392,10 @@ def settle_credits(
         name, kind, counted = match.group(1), match.group(2), int(match.group(3))
         listed, statement = sources.get(label, (None, label))
         names = [listed, name] + ([name.split('. ', 1)[1]] if '. ' in name else [])
-        planned = find_credits(names, credits) if credits is not None else None
+        key = find_key(names, plan.credits) if plan is not None else None
+        planned = plan.credits[key] if key is not None else None
+        if kind == 'дисциплина' and key is not None and key in plan.facultatives:
+            kind = 'факультатив'
         notes = []
         if planned is not None and float(planned).is_integer():
             final, source = int(planned), 'учебный план'
@@ -399,7 +403,7 @@ def settle_credits(
                 notes.append(f'по часам ведомости {counted} з.е. — тот ли учебный план?')
         else:
             final, source = counted, 'часы ведомости'
-            if credits is None:
+            if plan is None:
                 notes.append(plan_problem)
             elif planned is None:
                 notes.append('нет в учебном плане')
@@ -525,15 +529,18 @@ def process_student_workbook(
     logger.info("Matching disciplines from reference list")
     df_final = parse_discipline(df_stud_scores, disciplines_bytes)
 
-    credits, plan_problem = None, 'учебный план не загружен'
+    curriculum, plan_problem = None, 'учебный план не загружен'
     if curriculum_bytes:
         try:
-            credits, sheet = plan_credits(curriculum_bytes)
-            logger.info("Curriculum sheet %r has credits for %d names", sheet, len(credits))
+            curriculum = read_plan(curriculum_bytes)
+            logger.info(
+                "Curriculum sheet %r has credits for %d names, %d facultatives",
+                curriculum.sheet, len(curriculum.credits), len(curriculum.facultatives),
+            )
         except WorkbookError as error:
             plan_problem = f'учебный план не прочитан ({error})'
             logger.warning("Curriculum is unreadable, credits come from the statement")
-    df_final, df_check = settle_credits(df_final, hours, ungraded, credits, plan_problem)
+    df_final, df_check = settle_credits(df_final, hours, ungraded, curriculum, plan_problem)
 
     logger.info("Processing complete")
     return df_stud_scores, df_final, df_check

@@ -46,6 +46,20 @@ def curriculum(credits, titles=("Структура ОП", "Объем част�
     return save(workbook)
 
 
+def plans_curriculum(*rows) -> bytes:
+    """
+    Curriculum as «Планы» saves it: a block or a heading in the index column,
+    an element as (index, name, credits).
+    """
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Индекс", "Структура ОП", "Кафедра", "Объем частей ОП\nв зачетных единицах"])
+    sheet.append(["", "", "", "Всего"])
+    for row in rows:
+        sheet.append([row[0]] if len(row) == 1 else [row[0], row[1], "Кафедра", row[2]])
+    return save(workbook)
+
+
 def save(workbook) -> bytes:
     content = io.BytesIO()
     workbook.save(content)
