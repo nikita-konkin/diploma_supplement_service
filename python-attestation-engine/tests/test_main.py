@@ -277,3 +277,16 @@ def test_cannot_hide_which_level_is_analysed():
     assert progress_line("Анализ: /tmp/attestation-x/2026-2027/нечет/1/м") == "Анализ: магистратура", (
         "Progress line lost the level being analysed"
     )
+
+
+def test_cannot_hide_lost_session_cookie(tmp_path):
+    _, client, _ = make_service(tmp_path)
+    location = log_in(client).headers["location"]
+    client.cookies.clear()
+    assert "не сохранил cookie" in client.get(location).text, "Lost session cookie sent the user back to login silently"
+
+
+def test_cannot_warn_about_cookie_when_it_arrived(tmp_path):
+    _, client, _ = make_service(tmp_path)
+    location = log_in(client).headers["location"]
+    assert "не сохранил cookie" not in client.get(location).text, "Working login was reported as a lost cookie"

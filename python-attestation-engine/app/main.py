@@ -45,6 +45,11 @@ LOGIN_ERRORS = {
     "limit": "Слишком много неудачных попыток. Подождите 15 минут.",
     "portal": "Портал РИТМ недоступен с сервера. Попробуйте позже.",
     "expired": "Сеанс завершён. Войдите снова.",
+    # The portal accepted the login, but the browser came back without the session cookie
+    "cookie": (
+        "Портал РИТМ принял вход, но браузер не сохранил cookie сеанса. Откройте сайт по HTTPS: "
+        "по обычному HTTP защищённую cookie браузеры не сохраняют."
+    ),
 }
 NETWORK_ERRORS = {"ConnectionError", "Timeout", "ReadTimeout", "ConnectTimeout", "SSLError"}
 SECURITY_HEADERS = {
@@ -202,6 +207,9 @@ def create_app(settings: Settings, portal: Any = None) -> FastAPI:
     async def index(request: Request, error: str = ""):
         if current_session(request) is not None:
             return page("index.html")
+        if error == "none":
+            logger.warning("Browser came back from login without the session cookie")
+            error = "cookie"
         return page("login.html", LOGIN_ERRORS.get(error, ""))
 
     @app.get(BASE + "/static/{name}")
@@ -233,7 +241,8 @@ def create_app(settings: Settings, portal: Any = None) -> FastAPI:
         limiter.succeeded(client)
         session = sessions.create(username, portal_session)
         logger.info("Login succeeded for %s", username)
-        response = RedirectResponse(BASE, status.HTTP_303_SEE_OTHER)
+        # «?error=none» is only seen when the cookie did not come back: the page then says why
+        response = RedirectResponse(BASE + "?error=none", status.HTTP_303_SEE_OTHER)
         response.set_cookie(
             COOKIE,
             session.token,

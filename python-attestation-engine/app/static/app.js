@@ -334,6 +334,8 @@ function guarded(action) {
 }
 
 async function start() {
+  // the login redirect leaves «?error=none» behind; it only matters when the cookie is lost
+  if (window.location.search) window.history.replaceState(null, "", BASE);
   const me = await api("/api/me");
   csrf = me.csrf;
   $("who").textContent = me.login;
