@@ -9,7 +9,7 @@ import synthetic
 def build(root, attestation=1):
     synthetic.write_attestation(root, attestation=attestation)
     period = ritm_fetch.AttestationPeriod(2026, True, attestation)
-    return make_report.build_all(None, period, root, ["б", "м"], log=lambda message: None)
+    return make_report.build_all(None, period, root, ["б", "м"], log=lambda message: None, pdf=False)
 
 
 def data_of(attestation_dir):

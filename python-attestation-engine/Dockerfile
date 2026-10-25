@@ -2,11 +2,13 @@ FROM python:3.12-bookworm AS app
 
 WORKDIR /app
 
-# Liberation fonts stand in for Times New Roman in charts and reports
+# Liberation fonts stand in for Times New Roman in charts and reports;
+# LibreOffice Writer without the GUI turns the DOCX reports into PDF (reports/pdf_export.py)
 RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     gosu \
     fonts-liberation \
+    libreoffice-writer-nogui \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

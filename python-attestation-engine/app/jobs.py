@@ -25,11 +25,18 @@ logger = logging.getLogger(__name__)
 # (work folder, log) -> attestation folder with the reports
 Work = Callable[[Path, Callable[[str], None]], Path]
 
+# key -> (file in the attestation folder, document, format); one document comes in several formats,
+# PDF first: it is what most people open
 RESULT_FILES = {
-    "short": ("attestation_report_short.docx", "Краткий отчёт (DOCX)"),
-    "bachelor": ("б/attestation_report_bachelor.docx", "Подробный: бакалавриат (DOCX)"),
-    "master": ("м/attestation_report_master.docx", "Подробный: магистратура (DOCX)"),
-    "markdown": ("attestation_report.md", "Отчёт в Markdown"),
+    "short_bachelor_pdf": ("attestation_report_short_bachelor.pdf", "Краткий отчёт: бакалавриат", "PDF"),
+    "short_bachelor": ("attestation_report_short_bachelor.docx", "Краткий отчёт: бакалавриат", "DOCX"),
+    "short_master_pdf": ("attestation_report_short_master.pdf", "Краткий отчёт: магистратура", "PDF"),
+    "short_master": ("attestation_report_short_master.docx", "Краткий отчёт: магистратура", "DOCX"),
+    "bachelor_pdf": ("б/attestation_report_bachelor.pdf", "Подробный отчёт: бакалавриат", "PDF"),
+    "bachelor": ("б/attestation_report_bachelor.docx", "Подробный отчёт: бакалавриат", "DOCX"),
+    "master_pdf": ("м/attestation_report_master.pdf", "Подробный отчёт: магистратура", "PDF"),
+    "master": ("м/attestation_report_master.docx", "Подробный отчёт: магистратура", "DOCX"),
+    "markdown": ("attestation_report.md", "Сводка", "Markdown"),
 }
 DATA_FILE = "attestation_report.json"  # данные графиков страницы, см. report_model.model_data
 
@@ -50,6 +57,7 @@ class Job:
     markdown: Optional[str] = None
     data: Optional[dict] = None
     files: dict[str, Path] = field(default_factory=dict)
+    sizes: dict[str, int] = field(default_factory=dict)
     created: float = field(default_factory=time.monotonic)
 
     def public(self) -> dict:
@@ -60,11 +68,26 @@ class Job:
             "error": self.error,
             "markdown": self.markdown,
             "data": self.data,
-            "downloads": [
-                {"label": RESULT_FILES[key][1], "href": f"/attestation/api/jobs/{self.id}/files/{key}"}
-                for key in self.files
-            ],
+            "downloads": self.downloads(),
         }
+
+    def downloads(self) -> list[dict]:
+        """[{label: document, files: [{format, href, size}]}] in the order of RESULT_FILES."""
+        documents: dict[str, list[dict]] = {}
+        for key in self.files:
+            _, label, kind = RESULT_FILES[key]
+            documents.setdefault(label, []).append({
+                "format": kind,
+                "href": f"/attestation/api/jobs/{self.id}/files/{key}",
+                "size": file_size(self.sizes.get(key, 0)),
+            })
+        return [{"label": label, "files": files} for label, files in documents.items()]
+
+
+def file_size(size: int) -> str:
+    if size >= 1_000_000:
+        return f"{size / 1_000_000:.1f} МБ".replace(".", ",")
+    return f"{max(size // 1000, 1)} КБ"
 
 
 LEVEL_FOLDERS = {"б": "бакалавриат", "м": "магистратура"}
@@ -113,9 +136,10 @@ class JobRunner:
             attestation_dir = work(job.workdir, lambda message: job.progress.append(progress_line(message)))
             job.files = {
                 key: attestation_dir / name
-                for key, (name, _) in RESULT_FILES.items()
+                for key, (name, _, _) in RESULT_FILES.items()
                 if (attestation_dir / name).exists()
             }
+            job.sizes = {key: path.stat().st_size for key, path in job.files.items()}
             job.markdown = (attestation_dir / RESULT_FILES["markdown"][0]).read_text(encoding="utf-8")
             data_path = attestation_dir / DATA_FILE
             # without the data the page still shows the report, only without charts
