@@ -1,5 +1,6 @@
-"""Краткий отчёт (справка) об аттестации кафедры: сводные таблицы по группам, преподавателям и
-критическим дисциплинам на 3–5 страницах.
+"""Краткий отчёт (справка) об аттестации кафедры — отдельно по бакалавриату и магистратуре:
+сводные таблицы по группам, преподавателям и критическим дисциплинам на 3–5 страницах и
+приложение А с баллами каждого студента по группам.
 
 Реквизиты — по ГОСТ Р 7.0.97-2016 (справка), текст и таблицы — по ГОСТ 7.32-2017:
 поля 30/15/20/20 мм, Times New Roman 14 пт, интервал 1,5, абзацный отступ 1,25 см,
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections import Counter
 from datetime import datetime
 from pathlib import Path
 
@@ -41,7 +43,12 @@ HEADER_SIZE = 10
 CONTENT_WIDTH_MM = 165  # 210 - 30 - 15
 STATUS_FILLS = {rm.STATUS_OK: "E2EFDA", rm.STATUS_WARN: "FFF2CC", rm.STATUS_CRIT: "F8D7DA"}
 SUBHEADER_FILL = "F2F2F2"
-REPORT_NAME = "attestation_report_short.docx"
+# баллы в приложении: ниже минимального, 0 баллов, у всей группы 0 (баллы не выставлены)
+SCORE_FILLS = {"below": "FFF2CC", "zero": "F8D7DA", "none": "E7E6E6"}
+REPORT_NAMES = {
+    "б": "attestation_report_short_bachelor.docx",
+    "м": "attestation_report_short_master.docx",
+}
 
 
 class Numbering:
@@ -113,10 +120,11 @@ def add_heading(document: Document, numbering: Numbering, text: str) -> None:
     add_paragraph(document, f"{numbering.next_section()} {text}", align=WD_ALIGN_PARAGRAPH.LEFT, bold=True, space_before=12, space_after=6, keep_with_next=True)
 
 
-def add_table_caption(document: Document, numbering: Numbering, title: str) -> None:
+def add_table_caption(document: Document, numbering: Numbering, title: str, number: str | None = None) -> None:
+    """«Таблица 2 – …»; в приложении номер свой: «Таблица А.1 – …»."""
     add_paragraph(
         document,
-        f"Таблица {numbering.next_table()} – {title}",
+        f"Таблица {number or numbering.next_table()} – {title}",
         align=WD_ALIGN_PARAGRAPH.LEFT,
         indent=False,
         spacing=1.0,
@@ -194,13 +202,25 @@ def fix_column_widths(table, widths_mm: list[float]) -> None:
             cell.width = Mm(width)
 
 
-def add_row(table, values: list[str], widths_mm: list[float], *, left_columns: set[int] = frozenset(), bold: bool = False, fills: dict[int, str] | None = None) -> None:
+def add_row(
+    table,
+    values: list[str],
+    widths_mm: list[float],
+    *,
+    left_columns: set[int] = frozenset(),
+    bold: bool | set[int] = False,
+    fills: dict[int, str] | None = None,
+    size: int = TABLE_SIZE,
+):
+    """bold — вся строка или только перечисленные столбцы."""
     row = table.add_row()
     forbid_row_split(row)
     for index, (cell, value) in enumerate(zip(row.cells, values)):
         cell.width = Mm(widths_mm[index])
         align = WD_ALIGN_PARAGRAPH.LEFT if index in left_columns else WD_ALIGN_PARAGRAPH.CENTER
-        set_cell(cell, value, align=align, bold=bold, fill=(fills or {}).get(index))
+        heavy = index in bold if isinstance(bold, set) else bold
+        set_cell(cell, value, align=align, bold=heavy, fill=(fills or {}).get(index), size=size)
+    return row
 
 
 def add_subheader_row(table, text: str) -> None:
@@ -214,6 +234,10 @@ def add_note(document: Document, text: str) -> None:
     add_paragraph(document, f"Примечание – {text}", size=12, spacing=1.0, space_before=3, space_after=6)
 
 
+def model_levels(model: rm.DepartmentModel) -> list[str]:
+    return [level for level in rm.LEVEL_TITLES if model.groups_of(level)]
+
+
 def add_requisites(document: Document, model: rm.DepartmentModel) -> None:
     for line in organization_lines(model):
         add_paragraph(document, line, align=WD_ALIGN_PARAGRAPH.CENTER, indent=False, size=12, spacing=1.0)
@@ -225,9 +249,11 @@ def add_requisites(document: Document, model: rm.DepartmentModel) -> None:
     set_cell(table.rows[0].cells[0], f"{datetime.now():%d.%m.%Y} №{rm.NBSP}______", align=WD_ALIGN_PARAGRAPH.LEFT, size=12)
     set_cell(table.rows[0].cells[1], CITY, align=WD_ALIGN_PARAGRAPH.RIGHT, size=12)
 
+    levels = model_levels(model)
+    whose = f"студентов {rm.LEVEL_GENITIVE[levels[0]]}" if len(levels) == 1 else "студентов"
     add_paragraph(
         document,
-        f"О результатах аттестации № {model.attestation} студентов в {model.semester.replace('ый', 'ом')} "
+        f"О результатах аттестации № {model.attestation} {whose} в {model.semester.replace('ый', 'ом')} "
         f"семестре {model.study_year} учебного года",
         align=WD_ALIGN_PARAGRAPH.LEFT,
         indent=False,
@@ -239,13 +265,16 @@ def add_requisites(document: Document, model: rm.DepartmentModel) -> None:
 
 
 def add_overview(document: Document, model: rm.DepartmentModel) -> None:
-    levels = ", ".join(
-        f"{rm.LEVEL_TITLES[level]} — {len(model.groups_of(level))}" for level in rm.LEVEL_TITLES if model.groups_of(level)
-    )
+    levels = model_levels(model)
+    if len(levels) == 1:
+        groups = f"{len(model.groups)} учебных групп {rm.LEVEL_GENITIVE[levels[0]]} кафедры"
+    else:
+        counts = ", ".join(f"{rm.LEVEL_TITLES[level]} — {len(model.groups_of(level))}" for level in levels)
+        groups = f"{len(model.groups)} учебных групп кафедры ({counts})"
     add_paragraph(
         document,
         f"По данным системы РИТМ на {model.execution_time} в аттестации учтены {model.students} студентов "
-        f"{len(model.groups)} учебных групп кафедры ({levels}). По всем дисциплинам аттестованы "
+        f"{groups}. По всем дисциплинам аттестованы "
         f"{model.fully_attested} студентов ({rm.format_percent(rm.rate(model.fully_attested, model.students))}). "
         f"Из {model.records} оценок по дисциплинам не аттестовано {model.failed} "
         f"({rm.format_percent(model.failure_rate)}), в том числе с нулевым баллом — {model.zero}.",
@@ -288,18 +317,20 @@ def add_groups_table(document: Document, model: rm.DepartmentModel, numbering: N
         return row, status
 
     status_columns = (4, len(headers) - 1)
-    for level, title in rm.LEVEL_TITLES.items():
+    levels = model_levels(model)
+    for level in levels:
+        title = rm.LEVEL_TITLES[level]
         groups = model.groups_of(level)
-        if not groups:
-            continue
-        add_subheader_row(table, title.capitalize())
+        if len(levels) > 1:
+            add_subheader_row(table, title.capitalize())
         for group in groups:
             row, status = values(group.name, str(group.course or "–"), [group], group.delta)
             add_row(table, row, widths, left_columns={0}, fills={column: STATUS_FILLS[status] for column in status_columns})
         row, status = values(f"Итого: {title}", "", groups, None)
         add_row(table, row, widths, left_columns={0}, bold=True, fills={column: STATUS_FILLS[status] for column in status_columns})
-    row, status = values("Итого по кафедре", "", model.groups, None)
-    add_row(table, row, widths, left_columns={0}, bold=True, fills={column: STATUS_FILLS[status] for column in status_columns})
+    if len(levels) > 1:
+        row, status = values("Итого по кафедре", "", model.groups, None)
+        add_row(table, row, widths, left_columns={0}, bold=True, fills={column: STATUS_FILLS[status] for column in status_columns})
 
     add_note(
         document,
@@ -309,6 +340,7 @@ def add_groups_table(document: Document, model: rm.DepartmentModel, numbering: N
         f"{rm.status_label(rm.STATUS_CRIT)} — более {rm.CRIT_THRESHOLD:.0f} %."
         + (" Изменение — разность с предыдущей аттестацией в процентных пунктах." if has_delta else ""),
     )
+    add_paragraph(document, "Баллы каждого студента по дисциплинам приведены в приложении А.")
 
 
 def add_teachers_table(document: Document, model: rm.DepartmentModel, numbering: Numbering) -> None:
@@ -389,8 +421,102 @@ def add_signature(document: Document, model: rm.DepartmentModel) -> None:
         set_cell(cell, text, align=align, size=TEXT_SIZE)
 
 
-def build_short_report(attestation_dir: Path, output_path: Path | None = None) -> Path:
-    model = rm.build_model(attestation_dir)
+def student_labels(students: list[rm.StudentSummary]) -> dict[str, str]:
+    """Фамилия и инициалы; если они совпали у двух студентов группы — полное ФИО."""
+    short = {student.name: rm.short_name(student.name) for student in students}
+    repeated = Counter(short.values())
+    return {name: label if repeated[label] == 1 else name for name, label in short.items()}
+
+
+def format_score(value: float) -> str:
+    """Один знак после запятой: «94,91» не помещается в столбец балла."""
+    return f"{round(value, 1):g}".replace(".", ",")
+
+
+def narrow_cell_margins(table, mm: float) -> None:
+    margins = OxmlElement("w:tblCellMar")
+    for side in ("left", "right"):
+        element = OxmlElement(f"w:{side}")
+        element.set(qn("w:w"), str(round(mm * 56.7)))  # твипы: 1 мм = 56,7
+        element.set(qn("w:type"), "dxa")
+        margins.append(element)
+    table._tbl.tblPr.append(margins)
+
+
+def score_fill(student: rm.StudentSummary, item: rm.DisciplineSummary) -> str | None:
+    if item.not_entered:
+        return SCORE_FILLS["none"]
+    if item.subject not in student.failed_subjects:
+        return None
+    return SCORE_FILLS["zero"] if student.scores[item.subject] == 0 else SCORE_FILLS["below"]
+
+
+def add_group_students(document: Document, numbering: Numbering, group: rm.GroupSummary, number: str) -> None:
+    disciplines = group.disciplines  # порядок тот же, что на тепловой карте сайта: по доле Н/А
+    widths = [8, 44]
+    rest = CONTENT_WIDTH_MM - sum(widths) - 14
+    widths += [rest / max(len(disciplines), 1)] * len(disciplines) + [14]
+    size = 9 if len(disciplines) <= 10 else 8
+
+    add_table_caption(document, numbering, f"Группа {group.name}", number=number)
+    table = add_grid_table(document, ["№", "Студент", *(str(index) for index in range(1, len(disciplines) + 1)), "Н/А"], widths)
+    narrow_cell_margins(table, 0.8)
+    minimum = add_row(
+        table,
+        ["", "Минимальный балл", *(format_score(item.threshold) for item in disciplines), ""],
+        widths,
+        left_columns={1},
+        fills={index: SUBHEADER_FILL for index in range(len(widths))},
+        size=size,
+    )
+    mark_header_row(minimum)
+
+    labels = student_labels(group.students)
+    for index, student in enumerate(sorted(group.students, key=lambda item: item.name), start=1):
+        cells = [str(index), labels[student.name]]
+        fills = {}
+        for column, item in enumerate(disciplines, start=2):
+            score = student.scores.get(item.subject)
+            cells.append("–" if score is None else format_score(score))
+            fill = None if score is None else score_fill(student, item)
+            if fill:
+                fills[column] = fill
+        cells.append(str(student.failed))
+        add_row(
+            table, cells, widths, left_columns={1}, fills=fills, size=size,
+            bold={len(cells) - 1} if student.failed else False,
+        )
+
+    entries = []
+    for index, item in enumerate(disciplines, start=1):
+        teachers = ", ".join(rm.short_name(name) for name, _ in item.teachers)
+        entries.append(f"{index} – {item.subject}" + (f" ({teachers})" if teachers else ""))
+    add_paragraph(document, "Дисциплины: " + "; ".join(entries) + ".", size=10, spacing=1.0, space_before=3, space_after=9)
+
+
+def add_students_appendix(document: Document, model: rm.DepartmentModel, numbering: Numbering) -> None:
+    """Приложение по ГОСТ 7.32: с новой страницы, «ПРИЛОЖЕНИЕ А» и заголовок по центру."""
+    title = add_paragraph(document, "ПРИЛОЖЕНИЕ А", align=WD_ALIGN_PARAGRAPH.CENTER, indent=False, bold=True)
+    title.paragraph_format.page_break_before = True
+    add_paragraph(
+        document, "Результаты аттестации студентов по группам",
+        align=WD_ALIGN_PARAGRAPH.CENTER, indent=False, bold=True, space_after=6,
+    )
+    add_paragraph(
+        document,
+        "В таблицах — аттестационный балл каждого студента по каждой дисциплине группы; номера столбцов "
+        "расшифрованы под таблицей, в строке «Минимальный балл» — порог аттестации. Заливкой отмечены: "
+        "жёлтой — балл ниже минимального, розовой — 0 баллов, серой — дисциплина, по которой у всей группы "
+        "0 баллов (баллы не выставлены); «–» — дисциплины нет в плане студента. Н/А — число неаттестаций студента.",
+        size=12, spacing=1.0, space_after=6,
+    )
+    for index, group in enumerate(model.groups, start=1):
+        add_group_students(document, numbering, group, f"А.{index}")
+
+
+def build_short_report(attestation_dir: Path, level: str, output_path: Path | None = None) -> Path:
+    """Справка по одному уровню образования: «б» — бакалавриат, «м» — магистратура."""
+    model = rm.build_model(attestation_dir, level)
     document = Document()
     configure_document(document)
     numbering = Numbering()
@@ -403,10 +529,20 @@ def build_short_report(attestation_dir: Path, output_path: Path | None = None) -
     add_critical_table(document, model, numbering)
     add_conclusions(document, model, numbering)
     add_signature(document, model)
+    add_students_appendix(document, model, numbering)
 
-    output_path = output_path or attestation_dir / REPORT_NAME
+    output_path = output_path or attestation_dir / REPORT_NAMES[level]
     document.save(str(output_path))
     return output_path
+
+
+def build_short_reports(attestation_dir: Path) -> list[Path]:
+    """Справки по каждому уровню, для которого выгружены группы."""
+    return [
+        build_short_report(attestation_dir, level)
+        for level in REPORT_NAMES
+        if any((attestation_dir / level).glob("*.xml"))
+    ]
 
 
 def main() -> int:
@@ -414,11 +550,12 @@ def main() -> int:
     parser.add_argument("attestation_dir", help="Папка аттестации, например 2026-2027/нечет/1")
     args = parser.parse_args()
     try:
-        path = build_short_report(Path(args.attestation_dir).resolve())
+        paths = build_short_reports(Path(args.attestation_dir).resolve())
     except Exception as exc:  # pragma: no cover
         print(f"Ошибка сборки краткого отчёта: {exc}", file=sys.stderr)
         return 1
-    print(f"Краткий отчёт готов: {path}")
+    for path in paths:
+        print(f"Краткий отчёт готов: {path}")
     return 0
 
 

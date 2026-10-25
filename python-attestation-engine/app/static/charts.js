@@ -35,8 +35,10 @@ function score(value) {
 
 function shortName(fullName) {
   const parts = fullName.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return fullName;
-  return parts[0] + NBSP + parts.slice(1, 3).map(part => `${part[0]}.`).join(NBSP);
+  // у иностранных студентов на месте отчества в РИТМ бывает «-»
+  const initials = parts.slice(1, 3).filter(part => /\p{L}/u.test(part[0]));
+  if (!initials.length) return fullName;
+  return parts[0] + NBSP + initials.map(part => `${part[0]}.`).join(NBSP);
 }
 
 function plural(number, forms) {

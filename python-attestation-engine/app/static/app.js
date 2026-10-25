@@ -138,12 +138,28 @@ function addHeatmaps(target) {
   });
 }
 
+function renderDownloads(target, downloads) {
+  // один документ — одна строка, форматы рядом: «Краткий отчёт: бакалавриат  PDF · 180 КБ  DOCX · 71 КБ»
+  target.replaceChildren(...downloads.map(item => {
+    const row = el("div", "download");
+    row.appendChild(el("span", "download-name", item.label));
+    item.files.forEach(file => {
+      const link = el("a", file.format === "PDF" ? "download-file main" : "download-file");
+      link.href = file.href;
+      link.setAttribute("download", "");
+      link.append(el("b", "", file.format), el("span", "", file.size));
+      row.appendChild(link);
+    });
+    return row;
+  }));
+}
+
 function showReport(markdown, downloads, data) {
   reportData = data || null;
   const report = splitSections(markdown);
   document.getElementById("report-title").textContent = report.title;
   document.getElementById("report-intro").textContent = report.intro;
-  document.getElementById("downloads").innerHTML = downloads.map(item => `<a href="${item.href}" download>⬇ ${escapeHtml(item.label)}</a>`).join("");
+  renderDownloads(document.getElementById("downloads"), downloads);
   const tabs = document.getElementById("report-tabs");
   tabs.innerHTML = "";
   report.sections.forEach((section, index) => {
@@ -197,6 +213,17 @@ function periodQuery() {
     odd_semester: $("semester").value === "odd",
     attestation: $("att").value,
   });
+}
+
+function selectedText(id) {
+  const select = $(id);
+  return select.selectedIndex >= 0 && select.value ? select.options[select.selectedIndex].text : "—";
+}
+
+function updateStamp() {
+  // основная надпись внизу листа: что за документ, чей и за какой период
+  $("stamp-department").textContent = selectedText("department");
+  $("stamp-period").textContent = `№${NBSP}${$("att").value}, ${selectedText("semester")}, ${selectedText("year")}`;
 }
 
 function showError(exc) {
@@ -362,6 +389,8 @@ async function start() {
   const me = await api("/api/me");
   csrf = me.csrf;
   $("who").textContent = me.login;
+  $("stamp-user").textContent = me.login;
+  $("stamp-date").textContent = new Date().toLocaleDateString("ru-RU");
   fillYears(me.year);
   $("semester").value = me.odd_semester ? "odd" : "even";
   ["year", "semester", "att"].forEach(id => $(id).addEventListener("change", guarded(loadPeriodLists)));
@@ -372,7 +401,9 @@ async function start() {
   });
   $("logout").addEventListener("click", logout);
   $("report-form").addEventListener("submit", requestReport);
+  ["year", "semester", "att", "department"].forEach(id => $(id).addEventListener("change", updateStamp));
   await loadPeriodLists();
+  updateStamp();
 }
 
 document.addEventListener("DOMContentLoaded", () => {

@@ -67,7 +67,7 @@ class FakePortal:
         if self.build_result is not None:
             return self.build_result(request, workdir, log)
         (workdir / "attestation_report.md").write_text("# Отчёт\n\n## Сводка\n\nТест\n", encoding="utf-8")
-        (workdir / "attestation_report_short.docx").write_bytes(b"docx")
+        (workdir / "attestation_report_short_bachelor.docx").write_bytes(b"docx")
         return workdir
 
 

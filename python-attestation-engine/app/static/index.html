@@ -12,7 +12,7 @@
 <body>
 <main class="container">
   <div class="topbar">
-    <h1>📊 Отчёт по аттестации кафедры</h1>
+    <h1>Отчёт по аттестации кафедры</h1>
     <span class="who"><span id="who"></span> <button class="link-btn" id="logout" type="button">Выйти</button></span>
   </div>
   <p class="subtitle">Сервис выгружает из РИТМ «Аттестацию по выбранной группе» по группам кафедры и «Процент аттестаций по кафедрам», затем собирает краткий и подробный отчёты.</p>
@@ -44,7 +44,7 @@
     <div class="progress" id="progress" hidden></div>
   </form>
 
-  <div class="note"><b>🔒 Как защищены данные</b>
+  <div class="note"><b>Как защищены данные</b>
     Вход — учётной записью РИТМ: пароль проверяет портал, сервис хранит только сеанс портала в памяти и забывает его при выходе
     или через 30 минут бездействия. Выгрузка идёт под вашей учётной записью, поэтому в отчёт попадает только то, что портал показывает вам.
     Выгруженные данные содержат ФИО и баллы студентов, поэтому готовые файлы удаляются с сервера через 30 минут.</div>
@@ -57,6 +57,15 @@
     <div class="toolbar" id="toolbar"></div>
     <div class="report" id="report-body"></div>
   </section>
+
+  <footer class="stamp" aria-label="Основная надпись">
+    <div class="stamp-cell stamp-title"><small>Документ</small><span>Отчёт по аттестации кафедры</span><span class="stamp-org">ПГТУ · Радиотехнический факультет</span></div>
+    <div class="stamp-cell stamp-department"><small>Кафедра</small><span id="stamp-department">—</span></div>
+    <div class="stamp-cell stamp-period"><small>Аттестация</small><span id="stamp-period">—</span></div>
+    <div class="stamp-cell stamp-user"><small>Разраб.</small><span id="stamp-user">—</span></div>
+    <div class="stamp-cell stamp-date"><small>Дата</small><span id="stamp-date">—</span></div>
+    <div class="stamp-cell stamp-sheet"><small>Лист</small><span>1</span></div>
+  </footer>
 </main>
 </body>
 </html>

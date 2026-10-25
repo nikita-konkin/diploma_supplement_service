@@ -18,6 +18,7 @@ from department_info import DepartmentInfo, load_department
 
 
 LEVEL_TITLES = {"б": "бакалавриат", "м": "магистратура"}
+LEVEL_GENITIVE = {"б": "бакалавриата", "м": "магистратуры"}
 
 WARN_THRESHOLD = 30.0  # доля неаттестаций, %: до этого значения — «норма»
 CRIT_THRESHOLD = 50.0  # выше этого значения — «критично»
@@ -51,11 +52,13 @@ def normalize(text: str) -> str:
 
 
 def short_name(full_name: str) -> str:
-    """«Конкин Никита Александрович» -> «Конкин Н. А.»."""
+    """«Конкин Никита Александрович» -> «Конкин Н. А.»; «Тестов Иван -» -> «Тестов И.»."""
     parts = full_name.split()
-    if len(parts) < 2:
+    # у иностранных студентов на месте отчества в РИТМ бывает «-»
+    initials = [part for part in parts[1:3] if part[0].isalpha()]
+    if not initials:
         return full_name
-    return parts[0] + NBSP + NBSP.join(f"{part[0]}." for part in parts[1:3])
+    return parts[0] + NBSP + NBSP.join(f"{part[0]}." for part in initials)
 
 
 def rate(failed: int, total: int) -> float:
@@ -104,6 +107,7 @@ class StudentSummary:
     subjects: int
     failed: int
     scores: dict[str, float] = field(default_factory=dict)  # дисциплина -> балл
+    failed_subjects: set[str] = field(default_factory=set)  # у каждого студента свой минимальный балл
 
     @property
     def failure_rate(self) -> float:
@@ -335,6 +339,7 @@ def summarize_group(
                 subjects=len(student.subjects),
                 failed=student.failed_count,
                 scores={normalize(subject.name): subject.att_ball for subject in student.subjects},
+                failed_subjects={normalize(subject.name) for subject in student.subjects if not subject.is_attested},
             )
         )
         for subject in student.subjects:
@@ -392,17 +397,18 @@ def build_teachers(groups: list[GroupSummary]) -> list[TeacherSummary]:
     return sorted(teachers.values(), key=lambda item: (-item.failure_rate, item.name))
 
 
-def build_model(attestation_dir: Path) -> DepartmentModel:
+def build_model(attestation_dir: Path, level: str | None = None) -> DepartmentModel:
+    """Модель по всем группам кафедры или, с level («б», «м»), по одному уровню образования."""
     info = load_department(attestation_dir)
     teacher_index, kafedra_report = load_teacher_index(attestation_dir)
     groups: list[GroupSummary] = []
-    for level in LEVEL_TITLES:
-        level_dir = attestation_dir / level
+    for level_key in [level] if level else LEVEL_TITLES:
+        level_dir = attestation_dir / level_key
         if not level_dir.is_dir() or not any(level_dir.glob("*.xml")):
             continue
-        previous = previous_groups(attestation_dir, level)
+        previous = previous_groups(attestation_dir, level_key)
         for report in sorted(detailed.parse_all_groups(level_dir), key=lambda item: (parse_course(item.name) or 0, item.name)):
-            summary = summarize_group(report, level, teacher_index)
+            summary = summarize_group(report, level_key, teacher_index)
             before = previous.get(summary.name)
             if before is not None and before.total_records:
                 summary.previous_rate = before.failure_rate
@@ -412,10 +418,12 @@ def build_model(attestation_dir: Path) -> DepartmentModel:
                 summary.previous_fully_attested = sum(1 for student in before.students if student.failed_count == 0)
             groups.append(summary)
     if not groups:
-        raise FileNotFoundError(f"В {attestation_dir} нет XML групп в папках б/ и м/.")
+        folders = f"{level}/" if level else "б/ и м/"
+        raise FileNotFoundError(f"В {attestation_dir} нет XML групп в папках {folders}.")
 
     rank = None
-    if kafedra_report is not None:
+    # «Процент аттестаций по кафедрам» не содержит групп магистратуры: место кафедры о ней ничего не говорит
+    if kafedra_report is not None and level != "м":
         department = kafedra_report.department(info.name)
         place = kafedra_report.rank_of(info.name)
         if department is not None and place is not None:
