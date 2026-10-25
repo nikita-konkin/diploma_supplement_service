@@ -53,6 +53,10 @@ class RitmError(RuntimeError):
     pass
 
 
+class PortalSessionExpired(RitmError):
+    """Портал больше не считает сеанс вошедшим: нужен новый вход."""
+
+
 @dataclass(frozen=True)
 class AttestationPeriod:
     study_year: int  # год начала учебного года: 2026 = 2026-2027
@@ -180,9 +184,9 @@ def is_logon_page(response: requests.Response) -> bool:
 
 def ensure_authenticated(response: requests.Response) -> None:
     if is_logon_page(response):
-        raise RitmError("Портал вернул страницу входа: сеанс не авторизован или истёк.")
+        raise PortalSessionExpired("Портал вернул страницу входа: сеанс не авторизован или истёк.")
     if response.status_code == 401:
-        raise RitmError("Портал ответил 401 Unauthorized.")
+        raise PortalSessionExpired("Портал ответил 401 Unauthorized.")
 
 
 def login(username: str, password: str) -> requests.Session:
@@ -266,38 +270,63 @@ def parameter_values(values: dict[str, object]) -> str:
     )
 
 
-def report_parameters(period: AttestationPeriod, level: str) -> dict[str, object]:
+def report_parameters(period: AttestationPeriod, level: str, faculty: str = FACULTY_ID) -> dict[str, object]:
     return {
         "studyYear": period.study_year,
         "oddSemestr": 1 if period.odd_semester else 0,
         "attNum": period.attestation,
         "isMagistr": LEVELS[level],
-        "faculty": FACULTY_ID,
+        "faculty": faculty,
     }
 
 
-def list_groups(session: requests.Session, period: AttestationPeriod, level: str) -> list[StudyGroup]:
+def parameter_choices(
+    session: requests.Session, values: dict[str, object], name: str
+) -> list[tuple[str, str]]:
+    """Варианты параметра отчёта «Аттестация по выбранной группе»: (значение, подпись)."""
     root = soap_call(
         session,
         "GetItemParameters",
         f"<ItemPath>{escape(REPORT_PATH)}</ItemPath><ForRendering>true</ForRendering>"
-        f"<Values>{parameter_values(report_parameters(period, level))}</Values>",
+        f"<Values>{parameter_values(values)}</Values>",
     )
     for parameter in root.iter(f"{{{RS_NS}}}ItemParameter"):
-        if parameter.findtext(f"{{{RS_NS}}}Name") != "eduDroup":
-            continue
-        return [
-            StudyGroup(
-                group_id=value.findtext(f"{{{RS_NS}}}Value", ""),
-                name=value.findtext(f"{{{RS_NS}}}Label", "").strip(),
-            )
-            for value in parameter.iter(f"{{{RS_NS}}}ValidValue")
-        ]
-    raise RitmError("В отчёте не найден параметр выбора группы (eduDroup).")
+        if parameter.findtext(f"{{{RS_NS}}}Name") == name:
+            return [
+                (value.findtext(f"{{{RS_NS}}}Value", ""), value.findtext(f"{{{RS_NS}}}Label", "").strip())
+                for value in parameter.iter(f"{{{RS_NS}}}ValidValue")
+            ]
+    raise RitmError(f"В отчёте не найден параметр {name}.")
 
 
-def department_groups(groups: list[StudyGroup]) -> list[StudyGroup]:
-    return sorted((group for group in groups if GROUP_PATTERN.match(group.name)), key=lambda group: group.name)
+def list_faculties(session: requests.Session, period: AttestationPeriod) -> list[tuple[str, str]]:
+    values = report_parameters(period, "б")
+    del values["faculty"]
+    return parameter_choices(session, values, "faculty")
+
+
+def list_groups(
+    session: requests.Session, period: AttestationPeriod, level: str, faculty: str = FACULTY_ID
+) -> list[StudyGroup]:
+    return [
+        StudyGroup(group_id=value, name=label)
+        for value, label in parameter_choices(session, report_parameters(period, level, faculty), "eduDroup")
+    ]
+
+
+def group_code(name: str) -> str:
+    """Направление и форма обучения группы: «ИТС(о)-11» -> «ИТС(о)», «ИТСм(о)-21» -> «ИТСм(о)»."""
+    return name.rsplit("-", 1)[0] if "-" in name else name
+
+
+def department_groups(groups: list[StudyGroup], codes: set[str] | None = None) -> list[StudyGroup]:
+    """Группы кафедры: по выбранным направлениям, без них — по шаблону групп ИТРС."""
+    selected = (
+        (group for group in groups if group_code(group.name) in codes)
+        if codes is not None
+        else (group for group in groups if GROUP_PATTERN.match(group.name))
+    )
+    return sorted(selected, key=lambda group: group.name)
 
 
 def render_xml(
@@ -318,9 +347,13 @@ def render_xml(
 
 
 def render_group_xml(
-    session: requests.Session, period: AttestationPeriod, level: str, group: StudyGroup
+    session: requests.Session,
+    period: AttestationPeriod,
+    level: str,
+    group: StudyGroup,
+    faculty: str = FACULTY_ID,
 ) -> bytes:
-    params = {**report_parameters(period, level), "eduDroup": group.group_id, "showBalls": 1}
+    params = {**report_parameters(period, level, faculty), "eduDroup": group.group_id, "showBalls": 1}
     content, root = render_xml(session, REPORT_PATH, list(params.items()), group.name)
     title = root.attrib.get("ReportTitle", "")
     if group.name not in title:
@@ -329,22 +362,19 @@ def render_group_xml(
 
 
 def fetch_kafedra_report(
-    session: requests.Session, period: AttestationPeriod, root_dir: Path, log: Callable[[str], None] = print
+    session: requests.Session,
+    period: AttestationPeriod,
+    root_dir: Path,
+    log: Callable[[str], None] = print,
+    department: str = DEPARTMENT_NAME,
 ) -> Path:
     """«Процент аттестаций по кафедрам»: все кафедры вуза с разбивкой по преподавателям."""
-    params: list[tuple[str, object]] = [
-        ("studyYear", period.study_year),
-        ("oddSemestr", 1 if period.odd_semester else 0),
-        ("numAtt", period.attestation),
-        ("prepodAssigned", 3),  # все преподаватели, и закреплённые, и нет
-        ("onlyFilled", 0),  # «Учесть нулевых»: да
-    ]
-    params += [("courseNum", course) for course in range(1, 6)]
-    content, root = render_xml(session, KAFEDRA_REPORT_PATH, params, "Процент аттестаций по кафедрам")
+    content, root = fetch_kafedra_xml(session, period)
 
-    departments = [el.attrib.get("subjectKafedra") for el in root.iter() if el.tag.endswith("}subjectKafedra")]
-    if DEPARTMENT_NAME not in departments:
-        raise RitmError(f"В отчёте по кафедрам нет кафедры {DEPARTMENT_NAME} для периода: {period.label}")
+    departments = kafedra_departments(root)
+    if department not in departments:
+        # Отчёт всё равно нужен: без него нет преподавателей, но аттестация групп строится
+        log(f"В отчёте по кафедрам нет кафедры {department}: места кафедры и её преподавателей не будет")
 
     path = period.attestation_directory(root_dir) / KAFEDRA_REPORT_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -353,15 +383,35 @@ def fetch_kafedra_report(
     return path
 
 
+def kafedra_departments(root: ET.Element) -> list[str]:
+    """Кафедры из XML «Процент аттестаций по кафедрам», без повторов, по алфавиту."""
+    names = {el.attrib.get("subjectKafedra", "").strip() for el in root.iter() if el.tag.endswith("}subjectKafedra")}
+    return sorted(name for name in names if name)
+
+
+def fetch_kafedra_xml(session: requests.Session, period: AttestationPeriod) -> tuple[bytes, ET.Element]:
+    params: list[tuple[str, object]] = [
+        ("studyYear", period.study_year),
+        ("oddSemestr", 1 if period.odd_semester else 0),
+        ("numAtt", period.attestation),
+        ("prepodAssigned", 3),  # все преподаватели, и закреплённые, и нет
+        ("onlyFilled", 0),  # «Учесть нулевых»: да
+    ]
+    params += [("courseNum", course) for course in range(1, 6)]
+    return render_xml(session, KAFEDRA_REPORT_PATH, params, "Процент аттестаций по кафедрам")
+
+
 def fetch_level(
     session: requests.Session,
     period: AttestationPeriod,
     level: str,
     root_dir: Path,
     log: Callable[[str], None] = print,
+    faculty: str = FACULTY_ID,
+    codes: set[str] | None = None,
 ) -> list[Path]:
     output_dir = period.directory(root_dir, level)
-    groups = department_groups(list_groups(session, period, level))
+    groups = department_groups(list_groups(session, period, level, faculty), codes)
     if not groups:
         raise RitmError(f"Не найдено групп кафедры ({LEVEL_TITLES[level]}) для периода: {period.label}")
 
@@ -370,7 +420,7 @@ def fetch_level(
 
     saved: list[Path] = []
     for group in groups:
-        content = render_group_xml(session, period, level, group)
+        content = render_group_xml(session, period, level, group, faculty)
         path = output_dir / f"{group.name}.xml"
         path.write_bytes(content)
         students = content.count(b"<StudentNumber ")

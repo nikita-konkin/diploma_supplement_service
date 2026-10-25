@@ -12,37 +12,41 @@
 <main class="container">
   <div class="topbar">
     <h1>📊 Отчёт по аттестации кафедры</h1>
-    <button class="link-btn" id="logout" type="button">Выйти</button>
+    <span class="who"><span id="who"></span> <button class="link-btn" id="logout" type="button">Выйти</button></span>
   </div>
-  <p class="subtitle">Сервис входит в РИТМ под вашей учётной записью, выгружает «Аттестацию по выбранной группе» по группам кафедры и «Процент аттестаций по кафедрам», затем собирает краткий и подробный отчёты.</p>
+  <p class="subtitle">Сервис выгружает из РИТМ «Аттестацию по выбранной группе» по группам кафедры и «Процент аттестаций по кафедрам», затем собирает краткий и подробный отчёты.</p>
 
   <form id="report-form" autocomplete="off">
-    <div class="saved" id="saved" hidden>
-      <span>🔐 Сохранён пароль РИТМ для <b id="saved-login"></b></span>
-      <span><label class="check"><input type="checkbox" id="use-saved" checked> использовать</label>
-      <button class="link-btn" id="forget" type="button">Забыть пароль</button></span>
-    </div>
-    <div class="grid" id="credentials">
-      <div><label for="login">Логин РИТМ</label><input type="text" id="login" placeholder="marstu.net\ivanovii" autocomplete="off"></div>
-      <div><label for="password">Пароль РИТМ</label><input type="password" id="password" autocomplete="new-password"></div>
-    </div>
     <div class="grid">
       <div><label for="year">Учебный год</label><select id="year"></select></div>
       <div><label for="semester">Семестр</label><select id="semester"><option value="odd">нечётный</option><option value="even">чётный</option></select></div>
       <div><label for="att">Аттестация</label><select id="att"><option>1</option><option>2</option><option>3</option></select></div>
-      <div><label for="level">Группы</label><select id="level"><option value="all">бакалавриат и магистратура</option><option value="б">бакалавриат</option><option value="м">магистратура</option></select></div>
     </div>
-    <label class="check" id="remember-row"><input type="checkbox" id="remember"> Запомнить пароль РИТМ на сервере (хранится зашифрованным)</label>
+    <div class="grid">
+      <div><label for="department">Кафедра</label><select id="department" required><option value="">загрузка…</option></select></div>
+      <div><label for="faculty">Факультет</label><select id="faculty" required><option value="">загрузка…</option></select></div>
+    </div>
+
+    <fieldset class="directions">
+      <legend>Группы кафедры</legend>
+      <p class="hint" id="directions-hint">Отметьте направления своей кафедры. Выбор запомнится для кафедры, новые группы тех же направлений попадут в отчёт сами.</p>
+      <div id="directions"></div>
+    </fieldset>
+
+    <div class="grid">
+      <div><label for="faculty-title">Факультет в шапке справки</label><input type="text" id="faculty-title" maxlength="200" required></div>
+      <div><label for="head-name">Заведующий кафедрой</label><input type="text" id="head-name" maxlength="100" placeholder="И. О. Фамилия"></div>
+    </div>
+
     <button class="btn" id="submit" type="submit">Сформировать отчёт</button>
     <div class="error" id="form-error" role="alert"></div>
     <div class="progress" id="progress" hidden></div>
   </form>
 
   <div class="note"><b>🔒 Как защищены данные</b>
-    Страница открывается только после входа на сайт. Логин и пароль РИТМ передаются по HTTPS и используются для входа в портал на время одной выгрузки.
-    Без галочки «Запомнить» пароль не записывается ни на диск, ни в журналы. С галочкой хранится зашифрованным (AES-256-GCM),
-    ключ шифрования выводится из пароля входа на сайт и не хранится на сервере. Выгруженные данные содержат ФИО и баллы студентов,
-    поэтому готовые файлы удаляются с сервера через 30 минут.</div>
+    Вход — учётной записью РИТМ: пароль проверяет портал, сервис хранит только сеанс портала в памяти и забывает его при выходе
+    или через 30 минут бездействия. Выгрузка идёт под вашей учётной записью, поэтому в отчёт попадает только то, что портал показывает вам.
+    Выгруженные данные содержат ФИО и баллы студентов, поэтому готовые файлы удаляются с сервера через 30 минут.</div>
 
   <section id="result" hidden>
     <h1 id="report-title"></h1>

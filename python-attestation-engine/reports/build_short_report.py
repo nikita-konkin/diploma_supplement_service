@@ -24,16 +24,16 @@ import build_attestation_report as detailed
 import report_model as rm
 
 
-ORGANIZATION_LINES = [
+UNIVERSITY_LINES = [
     "Министерство науки и высшего образования Российской Федерации",
     "Федеральное государственное бюджетное образовательное учреждение высшего образования",
     "«Поволжский государственный технологический университет»",
-    "Радиотехнический факультет",
-    f"Кафедра {rm.DEPARTMENT_NAME}",
 ]
 CITY = "г. Йошкар-Ола"
-HEAD_POSITION = f"Заведующий кафедрой {rm.DEPARTMENT_NAME}"
-HEAD_NAME = "И. О. Фамилия"
+
+
+def organization_lines(model: rm.DepartmentModel) -> list[str]:
+    return UNIVERSITY_LINES + [model.department.faculty_title, f"Кафедра {model.department.name}"]
 
 TEXT_SIZE = 14
 TABLE_SIZE = 11  # ГОСТ 7.32 допускает в таблицах шрифт меньше, чем в тексте
@@ -215,7 +215,7 @@ def add_note(document: Document, text: str) -> None:
 
 
 def add_requisites(document: Document, model: rm.DepartmentModel) -> None:
-    for line in ORGANIZATION_LINES:
+    for line in organization_lines(model):
         add_paragraph(document, line, align=WD_ALIGN_PARAGRAPH.CENTER, indent=False, size=12, spacing=1.0)
     add_paragraph(document, "СПРАВКА", align=WD_ALIGN_PARAGRAPH.CENTER, indent=False, bold=True, space_before=18, space_after=6)
 
@@ -253,7 +253,7 @@ def add_overview(document: Document, model: rm.DepartmentModel) -> None:
     if model.rank is not None:
         add_paragraph(
             document,
-            f"По доле неаттестаций кафедра {rm.DEPARTMENT_NAME} занимает {model.rank.place}-е место из "
+            f"По доле неаттестаций кафедра {model.department.name} занимает {model.rank.place}-е место из "
             f"{model.rank.total} кафедр университета: {rm.format_percent(model.rank.failure_rate)} "
             f"при среднем значении {rm.format_percent(model.rank.university_rate)} "
             f"(по всем дисциплинам, которые ведут преподаватели кафедры).",
@@ -376,14 +376,14 @@ def add_conclusions(document: Document, model: rm.DepartmentModel, numbering: Nu
         add_paragraph(document, f"– {line}")
 
 
-def add_signature(document: Document) -> None:
+def add_signature(document: Document, model: rm.DepartmentModel) -> None:
     add_paragraph(document, "", space_before=18)
     table = document.add_table(rows=1, cols=3)
     table.autofit = False
     fix_column_widths(table, [80, 40, 45])
     for cell, text, align in zip(
         table.rows[0].cells,
-        [HEAD_POSITION, "____________", HEAD_NAME],
+        [f"Заведующий кафедрой {model.department.name}", "____________", model.department.head_name],
         [WD_ALIGN_PARAGRAPH.LEFT, WD_ALIGN_PARAGRAPH.CENTER, WD_ALIGN_PARAGRAPH.RIGHT],
     ):
         set_cell(cell, text, align=align, size=TEXT_SIZE)
@@ -402,7 +402,7 @@ def build_short_report(attestation_dir: Path, output_path: Path | None = None) -
         add_teachers_table(document, model, numbering)
     add_critical_table(document, model, numbering)
     add_conclusions(document, model, numbering)
-    add_signature(document)
+    add_signature(document, model)
 
     output_path = output_path or attestation_dir / REPORT_NAME
     document.save(str(output_path))

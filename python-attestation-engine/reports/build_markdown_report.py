@@ -157,7 +157,7 @@ def teachers_section(model: rm.DepartmentModel) -> list[str]:
 
 def build_markdown(model: rm.DepartmentModel) -> str:
     lines = [
-        f"# Кафедра {rm.DEPARTMENT_NAME}: {model.title}",
+        f"# Кафедра {model.department.name}: {model.title}",
         "",
         f"Данные РИТМ на {model.execution_time}. Н/А — неаттестация (балл ниже минимального). "
         f"Статус: {rm.status_label(rm.STATUS_OK)} — Н/А до {rm.WARN_THRESHOLD:.0f} %, "

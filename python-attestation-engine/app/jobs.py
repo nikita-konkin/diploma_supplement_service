@@ -21,8 +21,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# (login, password, year, odd semester, attestation, levels, work folder, log) -> attestation folder
-Pipeline = Callable[[str, str, int, bool, int, list, Path, Callable[[str], None]], Path]
+# (work folder, log) -> attestation folder with the reports
+Work = Callable[[Path, Callable[[str], None]], Path]
 
 RESULT_FILES = {
     "short": ("attestation_report_short.docx", "Краткий отчёт (DOCX)"),
@@ -63,48 +63,50 @@ class Job:
         }
 
 
+LEVEL_FOLDERS = {"б": "бакалавриат", "м": "магистратура"}
+
+
 def progress_line(message: str) -> str:
-    """Pipeline messages without server paths: «Бакалавриат: 12 групп -> /tmp/…» -> «Бакалавриат: 12 групп»."""
+    """Pipeline messages without server paths.
+
+    «Бакалавриат: 12 групп -> /tmp/…» -> «Бакалавриат: 12 групп»;
+    «Анализ: /tmp/…/1/б» -> «Анализ: бакалавриат»; «Отчёт готов: /tmp/…/x.docx» -> «Отчёт готов: x.docx».
+    """
     message = message.split(" -> ", 1)[0]
-    return re.sub(r":\s+/\S+", "", message).strip()
+
+    def last_part(match: re.Match) -> str:
+        name = match.group(1).rstrip("/").rsplit("/", 1)[-1]
+        return ": " + LEVEL_FOLDERS.get(name, name)
+
+    return re.sub(r":\s+(/\S+)", last_part, message).strip()
 
 
 class JobRunner:
-    def __init__(self, pipeline: Pipeline, files_ttl: int) -> None:
-        self.pipeline = pipeline
+    def __init__(self, files_ttl: int) -> None:
         self.files_ttl = files_ttl
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         # matplotlib's pyplot is not thread-safe: one report at a time
         self._busy = threading.Lock()
 
-    def start(
-        self, owner: str, login: str, password: str, year: int, odd: bool, attestation: int, levels: list
-    ) -> Job:
+    def start(self, owner: str, title: str, work: Work) -> Job:
         if not self._busy.acquire(blocking=False):
-            raise JobRejected("Уже формируется другой отчёт. Дождитесь его завершения.")
-        semester = "нечётный" if odd else "чётный"
+            raise JobRejected("Сейчас формируется другой отчёт (возможно, другим преподавателем). Попробуйте через несколько минут.")
         job = Job(
             id=secrets.token_urlsafe(16),
             owner=owner,
             workdir=Path(tempfile.mkdtemp(prefix="attestation-")),
-            title=f"Аттестация №{attestation}, {semester} семестр {year}-{year + 1}",
+            title=title,
         )
         with self._lock:
             self._jobs[job.id] = job
-        thread = threading.Thread(
-            target=self._run, args=(job, login, password, year, odd, attestation, levels), daemon=True
-        )
-        thread.start()
+        threading.Thread(target=self._run, args=(job, work), daemon=True).start()
         return job
 
-    def _run(self, job: Job, login: str, password: str, year: int, odd: bool, attestation: int, levels: list) -> None:
+    def _run(self, job: Job, work: Work) -> None:
         try:
             logger.info("Report job %s started: %s", job.id[:6], job.title)
-            attestation_dir = self.pipeline(
-                login, password, year, odd, attestation, levels, job.workdir,
-                lambda message: job.progress.append(progress_line(message)),
-            )
+            attestation_dir = work(job.workdir, lambda message: job.progress.append(progress_line(message)))
             job.files = {
                 key: attestation_dir / name
                 for key, (name, _) in RESULT_FILES.items()
@@ -136,20 +138,13 @@ class JobRunner:
             shutil.rmtree(job.workdir, ignore_errors=True)
         return len(expired)
 
-    def start_cleaner(self, interval: int = 60) -> None:
-        def loop() -> None:
-            while True:
-                time.sleep(interval)
-                removed = self.cleanup()
-                if removed:
-                    logger.info("Removed %d expired report jobs", removed)
-
-        threading.Thread(target=loop, daemon=True).start()
 
 
 def public_error(error: Exception) -> str:
     """Text for the page: RITM errors as they are, network failures in plain words, the rest generic."""
     name = type(error).__name__
+    if name == "PortalSessionExpired":
+        return "Сеанс портала РИТМ истёк. Выйдите и войдите снова."
     if name == "RitmError":
         return str(error)
     if name in {"ConnectionError", "Timeout", "ReadTimeout", "ConnectTimeout", "SSLError"}:

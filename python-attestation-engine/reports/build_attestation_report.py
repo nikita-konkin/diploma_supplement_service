@@ -18,6 +18,7 @@ from docx.shared import Mm, Pt, RGBColor
 from PIL import Image, ImageDraw, ImageFont
 
 import kafedra_teachers
+from department_info import load_department
 
 
 BLACK = RGBColor(0, 0, 0)
@@ -1342,7 +1343,7 @@ def build_report(input_dir: Path, output_path: Path) -> Path:
     # В отчёте по кафедрам только группы бакалавриата, поэтому раздел только в отчёте бакалавриата.
     if kafedra_path is not None and degree_genitive(input_dir) == "бакалавриата":
         kafedra_report = kafedra_teachers.parse_kafedra_report(kafedra_path)
-        department = kafedra_report.department()
+        department = kafedra_report.department(load_department(input_dir.parent).name)
         if department is not None:
             figure_number = add_teachers_section(
                 document, input_dir, kafedra_report, department, next_section_number, figure_number

@@ -18,6 +18,7 @@ import build_attestation_report
 import build_markdown_report
 import build_short_report
 import ritm_fetch
+from department_info import DepartmentInfo
 
 
 REPORT_NAMES = {
@@ -45,14 +46,24 @@ def build_all(
     root: Path,
     levels: list[str],
     log: Callable[[str], None] = print,
+    department: DepartmentInfo | None = None,
+    faculty: str = ritm_fetch.FACULTY_ID,
+    codes: set[str] | None = None,
 ) -> Path:
-    """Выгрузка (если есть сеанс портала), анализ и все отчёты; возвращает папку аттестации."""
+    """Выгрузка (если есть сеанс портала), анализ и все отчёты; возвращает папку аттестации.
+
+    department, faculty и codes (направления групп, «ИТС(о)») задают кафедру; без них — ИТРС.
+    """
+    attestation_dir = period.attestation_directory(root)
+    if department is not None:
+        department.save(attestation_dir)
+    department_name = department.name if department is not None else ritm_fetch.DEPARTMENT_NAME
     if session is not None:
-        ritm_fetch.fetch_kafedra_report(session, period, root, log)
+        ritm_fetch.fetch_kafedra_report(session, period, root, log, department_name)
     for level in levels:
         data_dir = period.directory(root, level)
         if session is not None:
-            ritm_fetch.fetch_level(session, period, level, root, log)
+            ritm_fetch.fetch_level(session, period, level, root, log, faculty, codes)
         elif not data_dir.is_dir():
             raise ritm_fetch.RitmError(f"Нет папки с данными: {data_dir}")
 
@@ -61,7 +72,6 @@ def build_all(
         report_path = build_attestation_report.build_report(data_dir, data_dir / REPORT_NAMES[level])
         log(f"Отчёт готов: {report_path}")
 
-    attestation_dir = period.attestation_directory(root)
     log(f"Краткий отчёт: {build_short_report.build_short_report(attestation_dir)}")
     log(f"Markdown: {build_markdown_report.build_markdown_report(attestation_dir)}")
     return attestation_dir

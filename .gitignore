@@ -41,5 +41,5 @@ tmp/
 *.xls
 !**/tests/data/*.xlsx
 
-# Attestation service: encrypted RITM password when run without Docker
+# Attestation service: department presets when run without Docker
 python-attestation-engine/data/

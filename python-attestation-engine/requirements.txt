@@ -13,5 +13,3 @@ matplotlib==3.9.2
 python-docx==1.1.2
 Pillow==10.4.0
 
-# AES-256-GCM for the remembered RITM password
-cryptography==43.0.1

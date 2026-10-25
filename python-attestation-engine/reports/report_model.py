@@ -13,9 +13,9 @@ from pathlib import Path
 
 import build_attestation_report as detailed
 import kafedra_teachers
+from department_info import DepartmentInfo, load_department
 
 
-DEPARTMENT_NAME = "ИТРС"
 LEVEL_TITLES = {"б": "бакалавриат", "м": "магистратура"}
 
 WARN_THRESHOLD = 30.0  # доля неаттестаций, %: до этого значения — «норма»
@@ -181,6 +181,7 @@ class DepartmentRank:
 @dataclass
 class DepartmentModel:
     attestation_dir: Path
+    department: DepartmentInfo
     study_year: str
     semester: str
     attestation: str
@@ -332,6 +333,7 @@ def build_teachers(groups: list[GroupSummary]) -> list[TeacherSummary]:
 
 
 def build_model(attestation_dir: Path) -> DepartmentModel:
+    info = load_department(attestation_dir)
     teacher_index, kafedra_report = load_teacher_index(attestation_dir)
     groups: list[GroupSummary] = []
     for level in LEVEL_TITLES:
@@ -348,8 +350,8 @@ def build_model(attestation_dir: Path) -> DepartmentModel:
 
     rank = None
     if kafedra_report is not None:
-        department = kafedra_report.department(DEPARTMENT_NAME)
-        place = kafedra_report.rank_of(DEPARTMENT_NAME)
+        department = kafedra_report.department(info.name)
+        place = kafedra_report.rank_of(info.name)
         if department is not None and place is not None:
             rank = DepartmentRank(
                 place=place,
@@ -361,6 +363,7 @@ def build_model(attestation_dir: Path) -> DepartmentModel:
     study_year, semester, attestation = parse_period(attestation_dir)
     return DepartmentModel(
         attestation_dir=attestation_dir,
+        department=info,
         study_year=study_year,
         semester=semester,
         attestation=attestation,
@@ -421,14 +424,15 @@ def conclusions(model: DepartmentModel, critical_reference: str = "в табли
             f"{(1 - NEAR_THRESHOLD_SHARE) * 100:.0f} % — эти студенты близки к аттестации."
         )
     department_teachers = [
-        teacher for teacher in model.teachers if DEPARTMENT_NAME in teacher.kafedras and teacher.status == STATUS_CRIT
+        teacher for teacher in model.teachers
+        if model.department.name in teacher.kafedras and teacher.status == STATUS_CRIT
     ]
     if department_teachers:
         names = ", ".join(short_name(teacher.name) for teacher in department_teachers)
         lines.append(sentence(f"Доля неаттестаций выше {CRIT_THRESHOLD:.0f} % у преподавателей кафедры: {names}"))
     if model.rank is not None:
         lines.append(
-            f"По доле неаттестаций кафедра {DEPARTMENT_NAME} занимает {model.rank.place}-е место из "
+            f"По доле неаттестаций кафедра {model.department.name} занимает {model.rank.place}-е место из "
             f"{model.rank.total} кафедр вуза ({format_percent(model.rank.failure_rate)} при среднем "
             f"{format_percent(model.rank.university_rate)})."
         )

@@ -61,7 +61,7 @@ services:
           context: ./python-attestation-engine
           dockerfile: Dockerfile
       container_name: diploma-python-attestation-engine
-      # Reachable only through the gateway at /attestation, which has its own login (B-10).
+      # Reachable only through the gateway at /attestation; login is with the RITM account (B-10).
       expose:
           - 8002
       environment:
@@ -69,13 +69,11 @@ services:
           - LOG_LEVEL=INFO
           - LOG_DIR=/app/logs
           - ATTESTATION_DATA_DIR=/app/data
-          - ATTESTATION_USERNAME=${ATTESTATION_USERNAME:-admin}
-          - ATTESTATION_PASSWORD_HASH=${ATTESTATION_PASSWORD_HASH:-}
           - ATTESTATION_COOKIE_SECURE=${ATTESTATION_COOKIE_SECURE:-1}
           - ATTESTATION_FILES_TTL=${ATTESTATION_FILES_TTL:-1800}
       volumes:
           - ./logs:/app/logs:z
-          # the encrypted RITM password, if the user asked to remember it
+          # departments.json: which directions of groups each department ticked
           - attestation-data:/app/data
       networks:
           - mynetwork

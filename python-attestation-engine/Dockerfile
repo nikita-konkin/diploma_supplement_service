@@ -14,7 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 COPY reports/ ./reports/
-COPY tools/ ./tools/
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # reports/ holds the command-line modules (make_report, ritm_fetch, ...) imported by name

@@ -1,9 +1,12 @@
 "use strict";
 
-// Страница сервиса аттестации: запуск задачи, опрос её состояния и показ отчёта по разделам.
+// Страница сервиса аттестации: выбор кафедры и групп, запуск задачи, опрос её состояния, показ отчёта.
 const BASE = "/attestation";
 const STATUS_CLASSES = { "●": "s-ok", "▲": "s-warn", "✕": "s-crit" };
+const LEVEL_TITLES = { "б": "Бакалавриат", "м": "Магистратура" };
+const LAST_DEPARTMENT = "attestation.department";
 let csrf = "";
+let faculties = [];
 
 function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -154,29 +157,122 @@ async function api(path, options = {}) {
   return data;
 }
 
-function showSaved(login) {
-  document.getElementById("saved").hidden = !login;
-  document.getElementById("saved-login").textContent = login || "";
-  toggleCredentials();
+function remembered(key) {
+  try { return window.localStorage.getItem(key) || ""; } catch (exc) { return ""; }
 }
 
-function usingSaved() {
-  return !document.getElementById("saved").hidden && document.getElementById("use-saved").checked;
+function remember(key, value) {
+  try { window.localStorage.setItem(key, value); } catch (exc) { /* only a convenience */ }
 }
 
-function toggleCredentials() {
-  const saved = usingSaved();
-  document.getElementById("credentials").hidden = saved;
-  document.getElementById("remember-row").hidden = saved;
-}
-
+const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+function periodQuery() {
+  return new URLSearchParams({
+    year: $("year").value,
+    odd_semester: $("semester").value === "odd",
+    attestation: $("att").value,
+  });
+}
+
+function showError(exc) {
+  $("form-error").textContent = exc.message;
+}
+
+function fillSelect(select, items, placeholder, selected) {
+  select.innerHTML = "";
+  select.add(new Option(placeholder, ""));
+  items.forEach(item => select.add(new Option(item.label, item.value)));
+  select.value = items.some(item => item.value === selected) ? selected : "";
+}
+
+async function loadPeriodLists() {
+  const query = periodQuery();
+  const department = $("department").value || remembered(LAST_DEPARTMENT);
+  const faculty = $("faculty").value;
+  $("department").innerHTML = '<option value="">загрузка списка кафедр…</option>';
+  const [facultyList, departments] = await Promise.all([
+    api(`/api/faculties?${query}`),
+    api(`/api/departments?${query}`),
+  ]);
+  faculties = facultyList;
+  fillSelect($("faculty"), faculties.map(item => ({ value: item.id, label: item.label })), "выберите факультет", faculty);
+  fillSelect($("department"), departments.map(name => ({ value: name, label: name })), "выберите кафедру", department);
+  if ($("department").value && !faculty) await applyPreset();
+  else await loadDirections(checkedCodes());
+}
+
+function checkedCodes() {
+  return Array.from(document.querySelectorAll("#directions input:checked")).map(input => input.value);
+}
+
+async function applyPreset() {
+  const department = $("department").value;
+  if (!department) return;
+  remember(LAST_DEPARTMENT, department);
+  const preset = await api(`/api/preset?${new URLSearchParams({ department })}`);
+  if (preset) {
+    if (faculties.some(item => item.id === preset.faculty)) $("faculty").value = preset.faculty;
+    $("faculty-title").value = preset.faculty_title || "";
+    $("head-name").value = preset.head_name || "";
+  } else {
+    $("head-name").value = "";
+  }
+  await loadDirections(preset ? preset.codes : []);
+}
+
+async function loadDirections(codes) {
+  const target = $("directions");
+  const faculty = $("faculty").value;
+  if (!faculty) {
+    target.innerHTML = '<p class="hint">Сначала выберите факультет.</p>';
+    return;
+  }
+  if (!$("faculty-title").value) {
+    const item = faculties.find(entry => entry.id === faculty);
+    $("faculty-title").value = item ? item.label : "";
+  }
+  target.innerHTML = '<p class="hint">Загружаю группы факультета…</p>';
+  const query = periodQuery();
+  query.set("faculty", faculty);
+  const directions = await api(`/api/groups?${query}`);
+  if (!directions.length) {
+    target.innerHTML = '<p class="hint">У факультета нет групп с аттестацией за этот период.</p>';
+    return;
+  }
+  const wanted = new Set(codes);
+  target.innerHTML = "";
+  ["б", "м"].forEach(level => {
+    const items = directions.filter(item => item.level === level);
+    if (!items.length) return;
+    const title = document.createElement("h4");
+    title.textContent = LEVEL_TITLES[level];
+    const list = document.createElement("div");
+    list.className = "direction-list";
+    items.forEach(item => {
+      const row = document.createElement("label");
+      row.className = "direction";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.value = item.code;
+      box.checked = wanted.has(item.code);
+      const name = document.createElement("b");
+      name.textContent = item.code;
+      const groups = document.createElement("small");
+      groups.textContent = item.groups.join(", ");
+      row.append(box, name, groups);
+      list.appendChild(row);
+    });
+    target.append(title, list);
+  });
+}
+
 async function waitForJob(job) {
-  const progress = document.getElementById("progress");
+  const progress = $("progress");
   progress.hidden = false;
   while (job.status === "running") {
-    progress.textContent = job.progress.length ? job.progress.join("\n") : "Вход в РИТМ…";
+    progress.textContent = job.progress.length ? job.progress.join("\n") : "Начинаю выгрузку…";
     await sleep(2000);
     job = await api(`/api/jobs/${encodeURIComponent(job.id)}`);
   }
@@ -187,50 +283,38 @@ async function waitForJob(job) {
 
 async function requestReport(event) {
   event.preventDefault();
-  const error = document.getElementById("form-error");
-  error.textContent = "";
-  const level = document.getElementById("level").value;
-  const body = {
-    use_saved: usingSaved(),
-    year: Number(document.getElementById("year").value),
-    odd_semester: document.getElementById("semester").value === "odd",
-    attestation: Number(document.getElementById("att").value),
-    levels: level === "all" ? ["б", "м"] : [level],
-  };
-  if (!body.use_saved) {
-    body.login = document.getElementById("login").value.trim();
-    body.password = document.getElementById("password").value;
-    body.remember = document.getElementById("remember").checked;
-    if (!body.login || !body.password) {
-      error.textContent = "Введите логин и пароль РИТМ.";
-      return;
-    }
+  $("form-error").textContent = "";
+  const codes = checkedCodes();
+  if (!$("department").value || !$("faculty").value) {
+    $("form-error").textContent = "Выберите кафедру и факультет.";
+    return;
   }
-  const button = document.getElementById("submit");
+  if (!codes.length) {
+    $("form-error").textContent = "Отметьте хотя бы одно направление групп.";
+    return;
+  }
+  const body = {
+    year: Number($("year").value),
+    odd_semester: $("semester").value === "odd",
+    attestation: Number($("att").value),
+    faculty: $("faculty").value,
+    department: $("department").value,
+    codes,
+    faculty_title: $("faculty-title").value.trim(),
+    head_name: $("head-name").value.trim(),
+  };
+  const button = $("submit");
   button.disabled = true;
   button.textContent = "Формирую отчёт, это займёт несколько минут…";
-  document.getElementById("result").hidden = true;
+  $("result").hidden = true;
   try {
-    const started = await api("/api/jobs", { method: "POST", body: JSON.stringify(body) });
-    document.getElementById("password").value = "";
-    if (body.remember) showSaved(body.login);
-    const job = await waitForJob(started);
+    const job = await waitForJob(await api("/api/jobs", { method: "POST", body: JSON.stringify(body) }));
     showReport(job.markdown, job.downloads);
   } catch (exc) {
-    error.textContent = exc.message;
+    showError(exc);
   } finally {
-    document.getElementById("password").value = "";
     button.disabled = false;
     button.textContent = "Сформировать отчёт";
-  }
-}
-
-async function forgetPassword() {
-  try {
-    await api("/api/vault/forget", { method: "POST" });
-    showSaved(null);
-  } catch (exc) {
-    document.getElementById("form-error").textContent = exc.message;
   }
 }
 
@@ -242,18 +326,30 @@ async function logout() {
   }
 }
 
+function guarded(action) {
+  return () => {
+    $("form-error").textContent = "";
+    action().catch(showError);
+  };
+}
+
 async function start() {
   const me = await api("/api/me");
   csrf = me.csrf;
+  $("who").textContent = me.login;
   fillYears(me.year);
-  document.getElementById("semester").value = me.odd_semester ? "odd" : "even";
-  showSaved(me.remembered_login);
-  document.getElementById("use-saved").addEventListener("change", toggleCredentials);
-  document.getElementById("forget").addEventListener("click", forgetPassword);
-  document.getElementById("logout").addEventListener("click", logout);
-  document.getElementById("report-form").addEventListener("submit", requestReport);
+  $("semester").value = me.odd_semester ? "odd" : "even";
+  ["year", "semester", "att"].forEach(id => $(id).addEventListener("change", guarded(loadPeriodLists)));
+  $("department").addEventListener("change", guarded(applyPreset));
+  $("faculty").addEventListener("change", () => {
+    $("faculty-title").value = "";
+    guarded(() => loadDirections(checkedCodes()))();
+  });
+  $("logout").addEventListener("click", logout);
+  $("report-form").addEventListener("submit", requestReport);
+  await loadPeriodLists();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  start().catch(exc => { document.getElementById("form-error").textContent = exc.message; });
+  start().catch(showError);
 });

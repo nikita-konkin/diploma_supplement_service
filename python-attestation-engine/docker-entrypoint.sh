@@ -7,7 +7,7 @@ data_dir="${ATTESTATION_DATA_DIR:-/app/data}"
 export LOG_DIR="$log_dir" ATTESTATION_DATA_DIR="$data_dir"
 mkdir -p "$log_dir" "$data_dir"
 chown -R appuser:appuser "$log_dir" "$data_dir"
-# the vault holds the encrypted RITM password: only the service user may read it
+# departments.json there is the service's own state: only the service user may touch it
 chmod 700 "$data_dir"
 
 exec gosu appuser "$@"
