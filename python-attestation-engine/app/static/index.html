@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Отчёт по аттестации</title>
+<link rel="stylesheet" href="/attestation/static/style.css">
+<script src="/attestation/static/charts.js" defer></script>
+<script src="/attestation/static/app.js" defer></script>
+</head>
+<body>
+<main class="container">
+  <div class="topbar">
+    <h1>📊 Отчёт по аттестации кафедры</h1>
+    <span class="who"><span id="who"></span> <button class="link-btn" id="logout" type="button">Выйти</button></span>
+  </div>
+  <p class="subtitle">Сервис выгружает из РИТМ «Аттестацию по выбранной группе» по группам кафедры и «Процент аттестаций по кафедрам», затем собирает краткий и подробный отчёты.</p>
+
+  <form id="report-form" autocomplete="off">
+    <div class="grid">
+      <div><label for="year">Учебный год</label><select id="year"></select></div>
+      <div><label for="semester">Семестр</label><select id="semester"><option value="odd">нечётный</option><option value="even">чётный</option></select></div>
+      <div><label for="att">Аттестация</label><select id="att"><option>1</option><option>2</option><option>3</option></select></div>
+    </div>
+    <div class="grid">
+      <div><label for="department">Кафедра</label><select id="department" required><option value="">загрузка…</option></select></div>
+      <div><label for="faculty">Факультет</label><select id="faculty" required><option value="">загрузка…</option></select></div>
+    </div>
+
+    <fieldset class="directions">
+      <legend>Группы кафедры</legend>
+      <p class="hint" id="directions-hint">Отметьте направления своей кафедры. Выбор запомнится для кафедры, новые группы тех же направлений попадут в отчёт сами.</p>
+      <div id="directions"></div>
+    </fieldset>
+
+    <div class="grid">
+      <div><label for="faculty-title">Факультет в шапке справки</label><input type="text" id="faculty-title" maxlength="200" required></div>
+      <div><label for="head-name">Заведующий кафедрой</label><input type="text" id="head-name" maxlength="100" placeholder="И. О. Фамилия"></div>
+    </div>
+
+    <button class="btn" id="submit" type="submit">Сформировать отчёт</button>
+    <div class="error" id="form-error" role="alert"></div>
+    <div class="progress" id="progress" hidden></div>
+  </form>
+
+  <div class="note"><b>🔒 Как защищены данные</b>
+    Вход — учётной записью РИТМ: пароль проверяет портал, сервис хранит только сеанс портала в памяти и забывает его при выходе
+    или через 30 минут бездействия. Выгрузка идёт под вашей учётной записью, поэтому в отчёт попадает только то, что портал показывает вам.
+    Выгруженные данные содержат ФИО и баллы студентов, поэтому готовые файлы удаляются с сервера через 30 минут.</div>
+
+  <section id="result" hidden>
+    <h1 id="report-title"></h1>
+    <p class="subtitle" id="report-intro"></p>
+    <div class="downloads" id="downloads"></div>
+    <div class="report-tabs" id="report-tabs"></div>
+    <div class="toolbar" id="toolbar"></div>
+    <div class="report" id="report-body"></div>
+  </section>
+</main>
+</body>
+</html>

@@ -27,6 +27,7 @@ function Test-PythonService {
 
 Test-PythonService "python-engine"
 Test-PythonService "python-xml-engine"
+Test-PythonService "python-attestation-engine"
 
 Push-Location (Join-Path $root "java-api")
 try {

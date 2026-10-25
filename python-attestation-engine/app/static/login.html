@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Вход — отчёт по аттестации</title>
+<link rel="stylesheet" href="/attestation/static/style.css">
+</head>
+<body>
+<main class="container narrow">
+  <h1>📊 Отчёт по аттестации</h1>
+  <p class="subtitle">Войдите учётной записью портала РИТМ. Пароль проверяет сам портал, сервис его не сохраняет.</p>
+  <!--error-->
+  <form method="post" action="/attestation/login">
+    <div class="field"><label for="username">Логин РИТМ</label><input type="text" id="username" name="username" placeholder="marstu.net\ivanovii" autocomplete="username" required autofocus></div>
+    <div class="field"><label for="password">Пароль РИТМ</label><input type="password" id="password" name="password" autocomplete="current-password" required></div>
+    <button class="btn" type="submit">Войти</button>
+  </form>
+  <p class="hint">Отчёт строится из тех данных, которые портал показывает вашей учётной записи.</p>
+</main>
+</body>
+</html>
