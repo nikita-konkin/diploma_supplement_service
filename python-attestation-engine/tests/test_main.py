@@ -290,3 +290,8 @@ def test_cannot_warn_about_cookie_when_it_arrived(tmp_path):
     _, client, _ = make_service(tmp_path)
     location = log_in(client).headers["location"]
     assert "не сохранил cookie" not in client.get(location).text, "Working login was reported as a lost cookie"
+
+
+def test_cannot_block_chart_script(tmp_path):
+    _, client, _ = make_service(tmp_path)
+    assert client.get("/attestation/static/charts.js").status_code == 200, "Chart script is not served"

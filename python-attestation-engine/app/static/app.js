@@ -2,11 +2,12 @@
 
 // Страница сервиса аттестации: выбор кафедры и групп, запуск задачи, опрос её состояния, показ отчёта.
 const BASE = "/attestation";
-const STATUS_CLASSES = { "●": "s-ok", "▲": "s-warn", "✕": "s-crit" };
+const STATUS_CLASSES = { "●": "s-ok", "▲": "s-warn", "✕": "s-crit", "○": "s-none" };
 const LEVEL_TITLES = { "б": "Бакалавриат", "м": "Магистратура" };
 const LAST_DEPARTMENT = "attestation.department";
 let csrf = "";
 let faculties = [];
+let reportData = null;  // данные графиков из attestation_report.json; без них — только таблицы
 
 function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -75,12 +76,20 @@ function showSection(section) {
   toolbar.innerHTML = "";
   const isCards = section.name === "Группы" || section.name === "Преподаватели";
   if (!isCards) {
-    target.innerHTML = renderMarkdown(section.body);
+    // плитки заменяют строку «Студентов: … · групп: …», дальше — выводы и таблицы как есть
+    const body = reportData && section.name === "Сводка"
+      ? section.body.split("\n").filter(line => !line.startsWith("Студентов: ")).join("\n")
+      : section.body;
+    target.innerHTML = renderMarkdown(body);
+    if (reportData && section.name === "Сводка") {
+      target.prepend(renderSummaryTiles(reportData), renderGroupChart(reportData));
+    }
     if (section.name === "Дисциплины") addStatusFilter(toolbar, target);
     return;
   }
   const cards = section.cards.map(chunk => `<div class="card">${renderMarkdown(chunk)}</div>`);
   target.innerHTML = cards.join("");
+  if (reportData && section.name === "Группы") addHeatmaps(target);
   const control = section.name === "Группы" ? document.createElement("select") : document.createElement("input");
   if (section.name === "Группы") {
     control.innerHTML = `<option value="">Все группы</option>` +
@@ -99,8 +108,10 @@ function showSection(section) {
 }
 
 function addStatusFilter(toolbar, target) {
-  const active = new Set(["s-ok", "s-warn", "s-crit"]);
-  [["s-crit", "✕ критично"], ["s-warn", "▲ внимание"], ["s-ok", "● норма"]].forEach(([cls, label]) => {
+  const active = new Set(["s-ok", "s-warn", "s-crit", "s-none"]);
+  const chips = [["s-crit", "✕ критично"], ["s-warn", "▲ внимание"], ["s-ok", "● норма"]];
+  if (target.querySelector("td.s-none")) chips.push(["s-none", "○ не выставлено"]);
+  chips.forEach(([cls, label]) => {
     const chip = document.createElement("button");
     chip.className = "chip on";
     chip.textContent = label;
@@ -108,7 +119,7 @@ function addStatusFilter(toolbar, target) {
       active.has(cls) ? active.delete(cls) : active.add(cls);
       chip.classList.toggle("on");
       target.querySelectorAll("tbody tr").forEach(row => {
-        const statusCell = row.querySelector("td.s-ok, td.s-warn, td.s-crit");
+        const statusCell = row.querySelector("td.s-ok, td.s-warn, td.s-crit, td.s-none");
         row.hidden = statusCell && !active.has(statusCell.className);
       });
     };
@@ -116,7 +127,19 @@ function addStatusFilter(toolbar, target) {
   });
 }
 
-function showReport(markdown, downloads) {
+function addHeatmaps(target) {
+  const byName = new Map(reportData.groups.map(group => [group.name, group]));
+  target.querySelectorAll(".card").forEach(card => {
+    const title = card.querySelector("h3");
+    const group = title && byName.get(title.textContent.split(" · ")[0].trim());
+    if (!group || !group.students_scores.length) return;
+    const stats = title.nextElementSibling;
+    (stats || title).after(renderHeatmap(group, reportData));
+  });
+}
+
+function showReport(markdown, downloads, data) {
+  reportData = data || null;
   const report = splitSections(markdown);
   document.getElementById("report-title").textContent = report.title;
   document.getElementById("report-intro").textContent = report.intro;
@@ -309,7 +332,7 @@ async function requestReport(event) {
   $("result").hidden = true;
   try {
     const job = await waitForJob(await api("/api/jobs", { method: "POST", body: JSON.stringify(body) }));
-    showReport(job.markdown, job.downloads);
+    showReport(job.markdown, job.downloads, job.data);
   } catch (exc) {
     showError(exc);
   } finally {

@@ -7,6 +7,7 @@ student names and scores and are deleted after FILES_TTL seconds.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import secrets
@@ -30,6 +31,7 @@ RESULT_FILES = {
     "master": ("м/attestation_report_master.docx", "Подробный: магистратура (DOCX)"),
     "markdown": ("attestation_report.md", "Отчёт в Markdown"),
 }
+DATA_FILE = "attestation_report.json"  # данные графиков страницы, см. report_model.model_data
 
 
 class JobRejected(Exception):
@@ -46,6 +48,7 @@ class Job:
     progress: list[str] = field(default_factory=list)
     error: Optional[str] = None
     markdown: Optional[str] = None
+    data: Optional[dict] = None
     files: dict[str, Path] = field(default_factory=dict)
     created: float = field(default_factory=time.monotonic)
 
@@ -56,6 +59,7 @@ class Job:
             "progress": self.progress[-12:],
             "error": self.error,
             "markdown": self.markdown,
+            "data": self.data,
             "downloads": [
                 {"label": RESULT_FILES[key][1], "href": f"/attestation/api/jobs/{self.id}/files/{key}"}
                 for key in self.files
@@ -113,6 +117,9 @@ class JobRunner:
                 if (attestation_dir / name).exists()
             }
             job.markdown = (attestation_dir / RESULT_FILES["markdown"][0]).read_text(encoding="utf-8")
+            data_path = attestation_dir / DATA_FILE
+            # without the data the page still shows the report, only without charts
+            job.data = json.loads(data_path.read_text(encoding="utf-8")) if data_path.exists() else None
             job.status = "done"
             logger.info("Report job %s finished with %d files", job.id[:6], len(job.files))
         except Exception as error:  # noqa: BLE001 — every failure must reach the page

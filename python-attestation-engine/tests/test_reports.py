@@ -75,3 +75,8 @@ def test_cannot_put_wrong_faculty_in_short_report_header(tmp_path):
 def test_cannot_sign_short_report_by_wrong_head(tmp_path):
     client, job = finished_job(tmp_path, head_name="П. П. Петров")
     assert "П. П. Петров" in short_report_text(client, job), "Short report is signed by a wrong head"
+
+
+def test_cannot_send_page_without_chart_data(tmp_path):
+    _, job = finished_job(tmp_path)
+    assert len(job["data"]["groups"]) == 3, "Job result has no chart data for the page"

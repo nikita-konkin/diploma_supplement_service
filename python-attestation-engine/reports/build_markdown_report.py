@@ -92,7 +92,7 @@ def groups_section(model: rm.DepartmentModel) -> list[str]:
                     rm.format_percent(item.failure_rate),
                     item.zero,
                     item.near,
-                    rm.status_label(item.status),
+                    rm.status_label(item.display_status),
                 ]
                 for item in group.disciplines
             ],
@@ -124,7 +124,7 @@ def disciplines_section(model: rm.DepartmentModel) -> list[str]:
                 item.teacher_names,
                 f"{item.failed} из {item.students}",
                 rm.format_percent(item.failure_rate),
-                rm.status_label(item.status),
+                rm.status_label(item.display_status),
             ]
             for item in items
         ],
@@ -148,7 +148,7 @@ def teachers_section(model: rm.DepartmentModel) -> list[str]:
         lines += table(
             ["Группа", "Дисциплина", "Н/А", "%", "Статус"],
             [
-                [item.group, item.subject, f"{item.failed} из {item.students}", rm.format_percent(item.failure_rate), rm.status_label(item.status)]
+                [item.group, item.subject, f"{item.failed} из {item.students}", rm.format_percent(item.failure_rate), rm.status_label(item.display_status)]
                 for item in sorted(teacher.disciplines, key=lambda item: (-item.failure_rate, item.group))
             ],
         )
@@ -161,7 +161,8 @@ def build_markdown(model: rm.DepartmentModel) -> str:
         "",
         f"Данные РИТМ на {model.execution_time}. Н/А — неаттестация (балл ниже минимального). "
         f"Статус: {rm.status_label(rm.STATUS_OK)} — Н/А до {rm.WARN_THRESHOLD:.0f} %, "
-        f"{rm.status_label(rm.STATUS_WARN)} — до {rm.CRIT_THRESHOLD:.0f} %, {rm.status_label(rm.STATUS_CRIT)} — выше.",
+        f"{rm.status_label(rm.STATUS_WARN)} — до {rm.CRIT_THRESHOLD:.0f} %, {rm.status_label(rm.STATUS_CRIT)} — выше"
+        + (f"; {rm.status_label(rm.STATUS_NONE)} — у всей группы 0 баллов." if model.not_entered_disciplines() else "."),
         "",
     ]
     for section in (summary_section, groups_section, disciplines_section, teachers_section):

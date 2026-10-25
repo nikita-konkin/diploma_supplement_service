@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -28,7 +29,9 @@ NBSP = "\u00a0"  # неразрывный пробел: инициалы и зн
 STATUS_OK = "норма"
 STATUS_WARN = "внимание"
 STATUS_CRIT = "критично"
-STATUS_MARKS = {STATUS_OK: "●", STATUS_WARN: "▲", STATUS_CRIT: "✕"}
+STATUS_NONE = "не выставлено"  # у всей группы 0 баллов: скорее всего, баллы ещё не внесены
+STATUS_MARKS = {STATUS_OK: "●", STATUS_WARN: "▲", STATUS_CRIT: "✕", STATUS_NONE: "○"}
+REPORT_DATA_FILE = "attestation_report.json"
 
 
 def status_for(rate: float) -> str:
@@ -68,6 +71,7 @@ class DisciplineSummary:
     failed: int = 0
     zero: int = 0
     near: int = 0
+    threshold: float = 0.0
     teachers: list[tuple[str, str]] = field(default_factory=list)  # (ФИО, кафедра)
 
     @property
@@ -75,8 +79,17 @@ class DisciplineSummary:
         return rate(self.failed, self.students)
 
     @property
+    def not_entered(self) -> bool:
+        """У всех студентов группы 0 баллов — это почти всегда не внесённые баллы, а не неуспеваемость."""
+        return self.students > 0 and self.zero == self.students
+
+    @property
     def status(self) -> str:
         return status_for(self.failure_rate)
+
+    @property
+    def display_status(self) -> str:
+        return STATUS_NONE if self.not_entered else self.status
 
     @property
     def teacher_names(self) -> str:
@@ -90,6 +103,7 @@ class StudentSummary:
     number: str
     subjects: int
     failed: int
+    scores: dict[str, float] = field(default_factory=dict)  # дисциплина -> балл
 
     @property
     def failure_rate(self) -> float:
@@ -105,6 +119,11 @@ class GroupSummary:
     disciplines: list[DisciplineSummary]
     students: list[StudentSummary]
     previous_rate: float | None = None
+    # итоги той же группы на прошлой аттестации, если она выгружена рядом
+    previous_failed: int | None = None
+    previous_records: int | None = None
+    previous_fully_attested: int | None = None
+    previous_students: int | None = None
 
     @property
     def records(self) -> int:
@@ -117,6 +136,11 @@ class GroupSummary:
     @property
     def zero(self) -> int:
         return sum(item.zero for item in self.disciplines)
+
+    @property
+    def not_entered(self) -> int:
+        """Неаттестации в дисциплинах, где баллы не выставлены всей группе."""
+        return sum(item.failed for item in self.disciplines if item.not_entered)
 
     @property
     def failure_rate(self) -> float:
@@ -231,11 +255,44 @@ class DepartmentModel:
     def fully_attested(self) -> int:
         return sum(group.fully_attested for group in self.groups)
 
+    @property
+    def not_entered(self) -> int:
+        return sum(group.not_entered for group in self.groups)
+
+    def not_entered_disciplines(self) -> list[DisciplineSummary]:
+        return [item for item in self.disciplines if item.not_entered]
+
+    def comparison(self) -> dict | None:
+        """Динамика к прошлой аттестации по группам, у которых она есть: доля Н/А и доля аттестованных полностью."""
+        groups = [group for group in self.groups if group.previous_records]
+        if not groups:
+            return None
+        records = sum(group.records for group in groups)
+        failed = sum(group.failed for group in groups)
+        students = sum(len(group.students) for group in groups)
+        fully = sum(group.fully_attested for group in groups)
+        previous_records = sum(group.previous_records for group in groups)
+        previous_failed = sum(group.previous_failed for group in groups)
+        previous_students = sum(group.previous_students for group in groups)
+        previous_fully = sum(group.previous_fully_attested for group in groups)
+        return {
+            "attestation": int(self.attestation) - 1,
+            "groups": len(groups),
+            "failure_rate": rate(previous_failed, previous_records),
+            "failure_delta": rate(failed, records) - rate(previous_failed, previous_records),
+            "fully_attested_rate": rate(previous_fully, previous_students),
+            "fully_attested_delta": rate(fully, students) - rate(previous_fully, previous_students),
+        }
+
     def groups_of(self, level: str) -> list[GroupSummary]:
         return [group for group in self.groups if group.level == level]
 
     def critical_disciplines(self) -> list[DisciplineSummary]:
-        items = [item for item in self.disciplines if item.failure_rate >= CRITICAL_DISCIPLINE_THRESHOLD]
+        # дисциплины без выставленных баллов перечислены в выводах отдельно, это не неуспеваемость
+        items = [
+            item for item in self.disciplines
+            if item.failure_rate >= CRITICAL_DISCIPLINE_THRESHOLD and not item.not_entered
+        ]
         return sorted(items, key=lambda item: (-item.failure_rate, -item.failed, item.group, item.subject))
 
 
@@ -277,6 +334,7 @@ def summarize_group(
                 number=student.student_number,
                 subjects=len(student.subjects),
                 failed=student.failed_count,
+                scores={normalize(subject.name): subject.att_ball for subject in student.subjects},
             )
         )
         for subject in student.subjects:
@@ -291,6 +349,7 @@ def summarize_group(
                 ),
             )
             item.students += 1
+            item.threshold = max(item.threshold, subject.threshold)
             if not subject.is_attested:
                 item.failed += 1
                 if subject.att_ball == 0:
@@ -308,15 +367,16 @@ def summarize_group(
     )
 
 
-def previous_rates(attestation_dir: Path, level: str) -> dict[str, float]:
+def previous_groups(attestation_dir: Path, level: str) -> dict[str, detailed.GroupReport]:
+    """Группы прошлой аттестации того же семестра, если её папка лежит рядом."""
     try:
         number = int(attestation_dir.name)
     except ValueError:
         return {}
     previous_dir = attestation_dir.parent / str(number - 1) / level
-    if number <= 1 or not previous_dir.is_dir():
+    if number <= 1 or not previous_dir.is_dir() or not any(previous_dir.glob("*.xml")):
         return {}
-    return {group.name: group.failure_rate for group in detailed.parse_all_groups(previous_dir)}
+    return {group.name: group for group in detailed.parse_all_groups(previous_dir)}
 
 
 def build_teachers(groups: list[GroupSummary]) -> list[TeacherSummary]:
@@ -340,10 +400,16 @@ def build_model(attestation_dir: Path) -> DepartmentModel:
         level_dir = attestation_dir / level
         if not level_dir.is_dir() or not any(level_dir.glob("*.xml")):
             continue
-        previous = previous_rates(attestation_dir, level)
+        previous = previous_groups(attestation_dir, level)
         for report in sorted(detailed.parse_all_groups(level_dir), key=lambda item: (parse_course(item.name) or 0, item.name)):
             summary = summarize_group(report, level, teacher_index)
-            summary.previous_rate = previous.get(summary.name)
+            before = previous.get(summary.name)
+            if before is not None and before.total_records:
+                summary.previous_rate = before.failure_rate
+                summary.previous_failed = before.total_failed
+                summary.previous_records = before.total_records
+                summary.previous_students = len(before.students)
+                summary.previous_fully_attested = sum(1 for student in before.students if student.failed_count == 0)
             groups.append(summary)
     if not groups:
         raise FileNotFoundError(f"В {attestation_dir} нет XML групп в папках б/ и м/.")
@@ -423,6 +489,16 @@ def conclusions(model: DepartmentModel, critical_reference: str = "в табли
             f"ещё {model.near} {plural(model.near, ('оценка', 'оценки', 'оценок'))} ниже порога менее чем на "
             f"{(1 - NEAR_THRESHOLD_SHARE) * 100:.0f} % — эти студенты близки к аттестации."
         )
+    not_entered = model.not_entered_disciplines()
+    if not_entered:
+        groups = {item.group for item in not_entered}
+        lines.append(
+            f"Баллы не выставлены (у всей группы 0) по {len(not_entered)} "
+            f"{plural(len(not_entered), ('дисциплине', 'дисциплинам', 'дисциплинам'))} в {len(groups)} "
+            f"{plural(len(groups), ('группе', 'группах', 'группах'))}: это {format_percent(rate(model.not_entered, model.failed))} "
+            f"неаттестаций; без них доля Н/А составила бы "
+            f"{format_percent(rate(model.failed - model.not_entered, model.records - model.not_entered))}."
+        )
     department_teachers = [
         teacher for teacher in model.teachers
         if model.department.name in teacher.kafedras and teacher.status == STATUS_CRIT
@@ -437,3 +513,86 @@ def conclusions(model: DepartmentModel, critical_reference: str = "в табли
             f"{format_percent(model.rank.university_rate)})."
         )
     return lines
+
+
+def model_data(model: DepartmentModel) -> dict:
+    """Данные для графиков на сайте: сводка, группы с составом Н/А и баллы студентов."""
+
+    def number(value: float | None) -> float | None:
+        return None if value is None else round(value, 2)
+
+    groups = []
+    for group in model.groups:
+        disciplines = sorted(group.disciplines, key=lambda item: (-item.failure_rate, item.subject))
+        groups.append({
+            "name": group.name,
+            "level": group.level,
+            "course": group.course,
+            "students": len(group.students),
+            "fully_attested": group.fully_attested,
+            "records": group.records,
+            "failed": group.failed,
+            "zero": group.zero - group.not_entered,
+            "not_entered": group.not_entered,
+            "failure_rate": number(group.failure_rate),
+            "previous_rate": number(group.previous_rate),
+            "status": group.status,
+            "disciplines": [
+                {
+                    "subject": item.subject,
+                    "teachers": [short_name(name) for name, _ in item.teachers],
+                    "threshold": number(item.threshold),
+                    "students": item.students,
+                    "failed": item.failed,
+                    "zero": item.zero,
+                    "near": item.near,
+                    "not_entered": item.not_entered,
+                }
+                for item in disciplines
+            ],
+            "students_scores": [
+                {
+                    "name": student.name,
+                    "failed": student.failed,
+                    "subjects": student.subjects,
+                    "scores": [number(student.scores.get(item.subject)) for item in disciplines],
+                }
+                for student in group.students
+            ],
+        })
+    rank = model.rank
+    return {
+        "department": model.department.name,
+        "title": model.title,
+        "execution_time": model.execution_time,
+        "thresholds": {"warn": WARN_THRESHOLD, "crit": CRIT_THRESHOLD, "near_share": NEAR_THRESHOLD_SHARE},
+        "summary": {
+            "students": model.students,
+            "groups": len(model.groups),
+            "fully_attested": model.fully_attested,
+            "records": model.records,
+            "failed": model.failed,
+            "zero": model.zero - model.not_entered,
+            "near": model.near,
+            "not_entered": model.not_entered,
+            "not_entered_disciplines": len(model.not_entered_disciplines()),
+            "failure_rate": number(model.failure_rate),
+            "comparison": None if model.comparison() is None else {
+                key: number(value) if isinstance(value, float) else value
+                for key, value in model.comparison().items()
+            },
+            "rank": None if rank is None else {
+                "place": rank.place,
+                "total": rank.total,
+                "failure_rate": number(rank.failure_rate),
+                "university_rate": number(rank.university_rate),
+            },
+        },
+        "groups": groups,
+    }
+
+
+def write_report_data(attestation_dir: Path, output_path: Path | None = None) -> Path:
+    path = output_path or attestation_dir / REPORT_DATA_FILE
+    path.write_text(json.dumps(model_data(build_model(attestation_dir)), ensure_ascii=False), encoding="utf-8")
+    return path

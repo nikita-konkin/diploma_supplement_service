@@ -38,6 +38,7 @@ COOKIE = "attestation_session"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_FILES = {
     "app.js": "text/javascript; charset=utf-8",
+    "charts.js": "text/javascript; charset=utf-8",
     "style.css": "text/css; charset=utf-8",
 }
 LOGIN_ERRORS = {

@@ -17,6 +17,7 @@ import attestation_analysis
 import build_attestation_report
 import build_markdown_report
 import build_short_report
+import report_model
 import ritm_fetch
 from department_info import DepartmentInfo
 
@@ -40,6 +41,33 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def fetch_previous(
+    session: ritm_fetch.requests.Session,
+    period: ritm_fetch.AttestationPeriod,
+    root: Path,
+    levels: list[str],
+    log: Callable[[str], None],
+    faculty: str,
+    codes: set[str] | None,
+) -> None:
+    """Прошлая аттестация того же семестра — для динамики; уже выгруженная не скачивается заново."""
+    if period.attestation <= 1:
+        return
+    previous = ritm_fetch.AttestationPeriod(period.study_year, period.odd_semester, period.attestation - 1)
+    for level in levels:
+        if any(previous.directory(root, level).glob("*.xml")):
+            continue
+        try:
+            ritm_fetch.fetch_level(
+                session, previous, level, root,
+                lambda message: log(f"Аттестация №{previous.attestation} для динамики. {message.strip()}"),
+                faculty, codes,
+            )
+        except ritm_fetch.RitmError as exc:
+            # без прошлой аттестации отчёт всё равно строится, только без динамики
+            log(f"Аттестация №{previous.attestation} недоступна, динамики не будет: {exc}")
+
+
 def build_all(
     session: ritm_fetch.requests.Session | None,
     period: ritm_fetch.AttestationPeriod,
@@ -60,6 +88,7 @@ def build_all(
     department_name = department.name if department is not None else ritm_fetch.DEPARTMENT_NAME
     if session is not None:
         ritm_fetch.fetch_kafedra_report(session, period, root, log, department_name)
+        fetch_previous(session, period, root, levels, log, faculty, codes)
     for level in levels:
         data_dir = period.directory(root, level)
         if session is not None:
@@ -74,6 +103,7 @@ def build_all(
 
     log(f"Краткий отчёт: {build_short_report.build_short_report(attestation_dir)}")
     log(f"Markdown: {build_markdown_report.build_markdown_report(attestation_dir)}")
+    log(f"Данные для графиков: {report_model.write_report_data(attestation_dir)}")
     return attestation_dir
 
 
