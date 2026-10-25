@@ -29,6 +29,8 @@ public final class App {
         LOG.info("Starting Java gateway on port {}", Config.apiPort());
         new FtBasic(
             new TkFork(
+                // Attestation reports: standalone component with its own login (python-attestation-engine)
+                new FkRegex("^/attestation(?:[/?].*)?$", new TkAttestation()),
                 // Front-end: Serve HTML upload page at root using a small Take
                 new FkRegex("^/$", new TkIndex()),
                 // Front-end: Serve HTML about pivot page at /about-pivot using a small Take

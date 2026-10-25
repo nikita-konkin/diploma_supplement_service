@@ -44,6 +44,13 @@ public final class Config {
     }
 
     /**
+     * Attestation report service (python-attestation-engine), proxied at /attestation.
+     */
+    public static String attestationBase() {
+        return get("PYTHON_ATTESTATION_ENGINE_URL", "http://python-attestation-engine:8002");
+    }
+
+    /**
      * Largest accepted upload request, bytes (MAX_UPLOAD_MB, 20 by default).
      */
     public static long maxUploadBytes() {

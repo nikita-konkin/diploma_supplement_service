@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Вход — отчёт по аттестации</title>
+<link rel="stylesheet" href="/attestation/static/style.css">
+</head>
+<body>
+<main class="container narrow">
+  <h1>📊 Отчёт по аттестации</h1>
+  <p class="subtitle">Закрытый раздел. Войдите учётной записью сервиса, не портала РИТМ.</p>
+  <!--error-->
+  <form method="post" action="/attestation/login">
+    <div class="field"><label for="username">Логин</label><input type="text" id="username" name="username" autocomplete="username" required autofocus></div>
+    <div class="field"><label for="password">Пароль</label><input type="password" id="password" name="password" autocomplete="current-password" required></div>
+    <button class="btn" type="submit">Войти</button>
+  </form>
+</main>
+</body>
+</html>

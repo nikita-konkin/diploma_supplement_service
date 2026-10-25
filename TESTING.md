@@ -8,7 +8,7 @@ On Windows PowerShell:
 .\test-all.ps1
 ```
 
-The script creates isolated Python virtual environments when needed, runs both
+The script creates isolated Python virtual environments when needed, runs the three
 Pytest suites, runs the Maven/JUnit suite, and validates `docker-compose.yml`.
 
 Without local Python or Maven, Docker is enough: every image runs its tests
@@ -24,6 +24,10 @@ To run only the gateway tests:
 cd java-api
 docker run --rm -v "$PWD":/build -w /build maven:3.9-eclipse-temurin-17 mvn -q -B test
 ```
+
+The attestation service tests never touch the RITM portal and never use real
+student data: `python-attestation-engine/tests/synthetic.py` writes made-up exports
+in the portal's XML shape, and the whole report pipeline runs on them.
 
 The tests follow the practical Angry Tests rules used in this project:
 
@@ -54,7 +58,11 @@ repository-level `logs/` directory. Files are separated by service and purpose:
 
 - `java-events.log` and `java-errors.log`;
 - `python-engine-events.log` and `python-engine-errors.log`;
-- `python-xml-engine-events.log` and `python-xml-engine-errors.log`.
+- `python-xml-engine-events.log` and `python-xml-engine-errors.log`;
+- `python-attestation-engine-events.log` and `python-attestation-engine-errors.log`.
+
+The attestation service masks anything that looks like a password before a record
+reaches a handler, and never logs request bodies.
 
 Logs rotate at 10 MB. Event files contain INFO/WARN records; error files contain
 ERROR records and stack traces.
