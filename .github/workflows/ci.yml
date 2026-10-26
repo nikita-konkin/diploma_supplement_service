@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker compose -f docker-compose.yml config -q
       - run: bash -n start-all-local.sh
 
@@ -34,12 +34,12 @@ jobs:
       matrix:
         service: [java-api, python-engine, python-xml-engine]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Сборка образа с тестами
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.service }}
           push: false
