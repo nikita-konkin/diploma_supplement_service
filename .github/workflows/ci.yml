@@ -1,0 +1,47 @@
+# Тесты каждого сервиса идут внутри сборки его образа (B-20): CI собирает те же образы,
+# что и сервер, а упавший тест останавливает сборку.
+# «Отчёт по аттестации» живёт в своём репозитории: nikita-konkin/attestation-report-service.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compose:
+    name: docker-compose.yml читается
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose -f docker-compose.yml config -q
+      - run: bash -n start-all-local.sh
+
+  image:
+    name: Тесты и образ ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [java-api, python-engine, python-xml-engine]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Сборка образа с тестами
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.service }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}

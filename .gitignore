@@ -40,6 +40,3 @@ tmp/
 *.xlsx
 *.xls
 !**/tests/data/*.xlsx
-
-# Attestation service: department presets when run without Docker
-python-attestation-engine/data/
