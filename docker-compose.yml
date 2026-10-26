@@ -56,39 +56,6 @@ services:
           start_period: 10s
       restart: unless-stopped
 
-  python-attestation-engine:
-      build:
-          context: ./python-attestation-engine
-          dockerfile: Dockerfile
-      container_name: diploma-python-attestation-engine
-      # Reachable only through the gateway at /attestation; login is with the RITM account (B-10).
-      expose:
-          - 8002
-      environment:
-          - PYTHONUNBUFFERED=1
-          - LOG_LEVEL=INFO
-          - LOG_DIR=/app/logs
-          - ATTESTATION_DATA_DIR=/app/data
-          - ATTESTATION_COOKIE_SECURE=${ATTESTATION_COOKIE_SECURE:-1}
-          - ATTESTATION_FILES_TTL=${ATTESTATION_FILES_TTL:-1800}
-      volumes:
-          - ./logs:/app/logs:z
-          # departments.json: which directions of groups each department ticked
-          - attestation-data:/app/data
-      networks:
-          - mynetwork
-      healthcheck:
-          test:
-              [
-                  "CMD-SHELL",
-                  'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8002/health'', timeout=2)"',
-              ]
-          interval: 30s
-          timeout: 10s
-          retries: 3
-          start_period: 10s
-      restart: unless-stopped
-
   java-gateway:
       build:
           context: ./java-api
@@ -105,7 +72,6 @@ services:
           - PYTHON_ENGINE_URL=http://python-engine:8000
           - PYTHON_XML_ENGINE_URL=http://python-xml-engine:8001
           - XML_API_BASE_URL=http://python-xml-engine:8001
-          - PYTHON_ATTESTATION_ENGINE_URL=http://python-attestation-engine:8002
           - LOG_DIR=/app/logs
           - JAVA_OPTS=-Xmx512m -Xms256m
       volumes:
@@ -115,10 +81,6 @@ services:
               condition: service_healthy
           python-xml-engine:
               condition: service_healthy
-          # The main pages work without it: /attestation then answers 502
-          python-attestation-engine:
-              condition: service_started
-              required: false
       networks:
           - mynetwork
       healthcheck:
@@ -137,9 +99,6 @@ services:
           start_period: 15s
       restart: unless-stopped
 
-
-volumes:
-    attestation-data:
 
 networks:
     mynetwork:
